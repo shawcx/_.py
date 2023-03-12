@@ -40,10 +40,10 @@ class Record:
 
         self.db = _.databases[database]
         self.schema = self.db.schema(module)
-        await _.wait(self.load(imported, module))
+        await _.wait(self.load(imported))
         await self.schema.apply()
 
-    def load(self, module, package):
+    def load(self, module):
         raise NotImplementedError
 
 
@@ -75,7 +75,8 @@ class Interface:
     def __str__(self):
         return self._record.__str__()
 
-class DbInterface:
+
+class DatabaseInterface:
     @classmethod
     async def find(cls, params=None, sort=None):
         rows = await cls._db.find(cls._name)
@@ -87,8 +88,8 @@ class DbInterface:
         return cls._record_cls(**row) if row else None
 
     @classmethod
-    async def count(cls):
-        return await cls._db.count(cls._name)
+    async def count(cls, field=None, value=None):
+        return await cls._db.count(cls._name, field, value)
 
     async def insert(self):
         values = self.asdict()
@@ -108,21 +109,29 @@ class DbInterface:
         await self._db.delete(self._name, self._primary_key, getattr(self, self._primary_key))
 
 
-class Handler(_.handlers.Protected):
+class HandlerInterface(_.handlers.Protected):
     def initialize(self):
         self.set_header('Content-Type', 'application/json; charset=UTF-8')
 
-    @_.auth.current_user
+    @_.auth.protected
     async def get(self, record, record_id):
+        if hasattr(self._record_cls, 'get'):
+            return self._record_cls.get(self, record, record_id)
+
         if not record_id:
             records = await self._db.find(record)
             self.write(dict(data=[dict(r) for r in records]))
         else:
             record = await self._db.find_one(record, self._record._primary_key, record_id)
+            if record is None:
+                raise _.HTTPError(404)
             self.write(record)
 
-    @_.auth.current_user
+    @_.auth.protected
     async def put(self, record, record_id):
+        if hasattr(self._record_cls, 'put'):
+            return self._record_cls.put(self, record, record_id)
+
         try:
             data = json.loads(self.request.body)
         except json.decoder.JSONDecodeError:
@@ -131,8 +140,11 @@ class Handler(_.handlers.Protected):
         await _.wait(self._record.put(record_id, data, self.request))
         self.set_status(204)
 
-    @_.auth.current_user
+    @_.auth.protected
     async def delete(self, record, record_id):
+        if hasattr(self._record_cls, 'delete'):
+            return self._record_cls.delete(self, record, record_id)
+
         if not record_id:
             raise _.HTTPError(500)
 

@@ -7,6 +7,7 @@
 #
 
 import asyncio
+import collections
 import inspect
 import logging
 import os
@@ -19,6 +20,8 @@ import tornado.web
 import _
 
 
+HTTPError = tornado.web.HTTPError
+
 # a generic error class for throwing exceptions
 class error(Exception):
     def __init__(self, fmt, *args):
@@ -27,7 +30,13 @@ class error(Exception):
     def __str__(self):
         return self.message
 
-HTTPError = tornado.web.HTTPError
+
+class Container(collections.UserDict):
+    def __getattr__(self, name):
+        try:
+            return self.get(name)
+        except KeyError:
+            raise AttributeError(name) from None
 
 
 def now():

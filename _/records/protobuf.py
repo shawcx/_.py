@@ -18,10 +18,12 @@ from . import Protobuf_pb2
 
 
 class Protobuf(_.records.Record):
-    def load(self, module, package):
+    _proto_handlers = {}
+
+    def load(self, module):
         if hasattr(_, self.name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.name, module.__name__)
-        self._container = {}
+        self._container = _.Container()
         setattr(_, self.name, self._container)
 
         # iterate over all the members of the protobuf modules
@@ -31,7 +33,6 @@ class Protobuf(_.records.Record):
                 continue
             # get a handle to the pb2 module descriptor
             pb2 = getattr(module, member)
-
             # iterate over all the message definitions
             for name,descriptor in pb2.DESCRIPTOR.message_types_by_name.items():
                 message = getattr(pb2, name)
@@ -40,10 +41,12 @@ class Protobuf(_.records.Record):
     def _message(self, name, message):
         table_options = message.DESCRIPTOR.GetOptions()
 
-        members = dict(record_cls=message)
-
+        members = dict(name=name,record_cls=message)
+        types   = [Interface]
         if not table_options.Extensions[Protobuf_pb2.no_db]:
             members.update(dict(db=self.db, table=name))
+            types.append(_.records.DatabaseInterface)
+
             table = self.schema.table(name)
             if table_options.HasExtension(Protobuf_pb2.id):
                 table.default_id(table_options.Extensions[Protobuf_pb2.id])
@@ -66,18 +69,20 @@ class Protobuf(_.records.Record):
 
         # Protobuf does not want you to subclass the Message
         # so we dynamically create a thin wrapper
-        record  = type(name, (Interface,), _.prefix(members))
+        record = type(name, tuple(types), _.prefix(members))
         self._container[name] = record
 
-        add_handler = True
-        # ignore messages explicitly defined as not a table
-        if table_options.Extensions[Protobuf_pb2.no_handler]:
-            add_handler = False
+        if not table_options.Extensions[Protobuf_pb2.no_handler]:
+            members['record'] = record
 
-        #if add_handler:
-        #    members['record'] = record
-        #    handler = type(name, (_.records.Handler,), _.prefix(members))
-        #    _.application._record_handler(self.name, handler)
+            # check if a custom handler was defined
+            handler = Protobuf._proto_handlers.get(message, None)
+            types = [handler] if handler else []
+            # add the base records handler
+            types.append(_.records.HandlerInterface)
+
+            handler = type(name, tuple(types), _.prefix(members))
+            _.application._record_handler(self.name, handler)
 
     _column_mapping = [
         None,
@@ -120,10 +125,16 @@ class Interface(_.records.Interface):
             preserving_proto_field_name    = True,
             )
 
-    #def asdict(self):
-    #    return self.dict(self._record)
+
+# decorator for adding custom handlers for message types
+def handler(message):
+    def wrap(proto_handler):
+        Protobuf._proto_handlers[message] = proto_handler
+        return proto_handler
+    return wrap
 
 
+# function to compile protobuf files for underscore apps
 if '__main__' == __name__:
     root = os.path.dirname(_.__file__)
     root = os.path.abspath(os.path.join(root, '..'))

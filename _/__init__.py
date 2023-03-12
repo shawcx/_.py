@@ -64,8 +64,8 @@ from . import components
 from .application import Application
 
 # placeholder for comonents
-caches    = {}
-databases = {}
-logins    = {}
-records   = {}
-supports  = {}
+caches    = Container()
+databases = Container()
+logins    = Container()
+records   = Container()
+supports  = Container()
