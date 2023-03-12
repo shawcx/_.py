@@ -76,13 +76,13 @@ class Protobuf(_.records.Record):
             members['record'] = record
 
             # check if a custom handler was defined
-            handler = Protobuf._proto_handlers.get(message, None)
-            types = [handler] if handler else []
+            proto_handler = Protobuf._proto_handlers.get(message, None)
+            types = [proto_handler] if proto_handler else []
             # add the base records handler
             types.append(_.records.HandlerInterface)
 
-            handler = type(name, tuple(types), _.prefix(members))
-            _.application._record_handler(self.name, handler)
+            record_handler = type(name, tuple(types), _.prefix(members))
+            _.application._record_handler(self.name, record_handler)
 
     _column_mapping = [
         None,
