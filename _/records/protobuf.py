@@ -17,46 +17,12 @@ import _
 from . import Protobuf_pb2
 
 
-class Record(_.records.Record):
-    def __init__(self, _msg=None):
-        self.__dict__['_msg'] = _msg if _msg else self._message()
-
-    class Json(_.records.Record.Json):
-        def default(self, obj):
-            if hasattr(obj, 'DESCRIPTOR'):
-                return Record.dict(obj)
-            return super(Json, self).default(obj)
-
-    @classmethod
-    def load(cls, data):
-        msg = cls._message()
-        google.protobuf.json_format.Parse(data, msg)
-        return cls(msg)
-
-    @classmethod
-    def dict(cls, message):
-        return google.protobuf.json_format.MessageToDict(
-            message,
-            including_default_value_fields = True,
-            preserving_proto_field_name    = True,
-            )
-
-    def _asdict(self):
-        return self.dict(self._msg)
-
-    def __getattr__(self, name):
-        return getattr(self._msg, name)
-
-    def __setattr__(self, name, value):
-        self._msg.__setattr__(name, value)
-
-    def __str__(self):
-        return self._msg.__str__()
-
-
-class Protobuf(_.records.Protocol):
-    def _load(self, module, package):
-        _.protobuf = {}
+class Protobuf(_.records.Record):
+    def load(self, module, package):
+        if hasattr(_, self.name):
+            raise _.error('Record name "%s" for "%s" conflicts in _ root', self.name, module.__name__)
+        self._container = {}
+        setattr(_, self.name, self._container)
 
         # iterate over all the members of the protobuf modules
         for member in dir(module):
@@ -74,7 +40,7 @@ class Protobuf(_.records.Protocol):
     def _message(self, name, message):
         table_options = message.DESCRIPTOR.GetOptions()
 
-        members = dict(message=message)
+        members = dict(record_cls=message)
 
         if not table_options.Extensions[Protobuf_pb2.no_db]:
             members.update(dict(db=self.db, table=name))
@@ -85,7 +51,7 @@ class Protobuf(_.records.Protocol):
             # iterate over message to determine columns
             for field in message.DESCRIPTOR.fields:
                 column = table.column(field.name)
-                column.type(_column_mapping[field.type])
+                column.type(Protobuf._column_mapping[field.type])
 
                 col_options = field.GetOptions()
                 # check if column should be a primary key
@@ -100,41 +66,62 @@ class Protobuf(_.records.Protocol):
 
         # Protobuf does not want you to subclass the Message
         # so we dynamically create a thin wrapper
-        record  = type(name, (Record,), _.prefix(members))
-        _.protobuf[name] = record
+        record  = type(name, (Interface,), _.prefix(members))
+        self._container[name] = record
 
         add_handler = True
         # ignore messages explicitly defined as not a table
         if table_options.Extensions[Protobuf_pb2.no_handler]:
             add_handler = False
 
-        if add_handler:
-            members['record'] = record
-            handler = type(name, (_.records.Handler,), _.prefix(members))
-            _.application._record_handler(self.name, handler)
+        #if add_handler:
+        #    members['record'] = record
+        #    handler = type(name, (_.records.Handler,), _.prefix(members))
+        #    _.application._record_handler(self.name, handler)
+
+    _column_mapping = [
+        None,
+        'DOUBLE PRECISION', # DOUBLE
+        'REAL',             # FLOAT
+        'BIGINT',           # INT64
+        'NUMERIC',          # UINT64
+        'INTEGER',          # INT32
+        'NUMERIC',          # FIXED64
+        'BIGINT',           # FIXED32
+        'BOOLEAN',          # BOOL
+        'TEXT',             # STRING
+        'JSONB',            # GROUP
+        'JSONB',            # MESSAGE
+        'BYTEA',            # BYTES
+        'BIGINT',           # UINT32
+        'INTEGER',          # ENUM
+        'INTEGER',          # SFIXED32
+        'BIGINT',           # SFIXED64
+        'INTEGER',          # SINT32
+        'BIGINT',           # SINT64
+        ]
 
 
-_column_mapping = [
-    None,
-    'DOUBLE PRECISION', # DOUBLE
-    'REAL',             # FLOAT
-    'BIGINT',           # INT64
-    'NUMERIC',          # UINT64
-    'INTEGER',          # INT32
-    'NUMERIC',          # FIXED64
-    'BIGINT',           # FIXED32
-    'BOOLEAN',          # BOOL
-    'TEXT',             # STRING
-    'JSONB',            # GROUP
-    'JSONB',            # MESSAGE
-    'BYTEA',            # BYTES
-    'BIGINT',           # UINT32
-    'INTEGER',          # ENUM
-    'INTEGER',          # SFIXED32
-    'BIGINT',           # SFIXED64
-    'INTEGER',          # SINT32
-    'BIGINT',           # SINT64
-    ]
+class Interface(_.records.Interface):
+    def __init__(self, _record=None):
+        self.__dict__['_record'] = _record if _record else self._record_cls()
+
+    @classmethod
+    def load(cls, msg):
+        _record = cls._record_cls()
+        google.protobuf.json_format.Parse(msg, _record)
+        return cls(_record)
+
+    @classmethod
+    def dict(cls, _record):
+        return google.protobuf.json_format.MessageToDict(
+            _record,
+            including_default_value_fields = True,
+            preserving_proto_field_name    = True,
+            )
+
+    #def asdict(self):
+    #    return self.dict(self._record)
 
 
 if '__main__' == __name__:

@@ -40,8 +40,9 @@ class Database:
     async def update(self, table, id_column, values):
         raise NotImplementedError
 
-    async def delete(self, table, values, column='id'):
-        raise NotImplementedError
+    async def delete(self, table, id_column, value):
+        statement = f'DELETE FROM {table} WHERE {id_column}=?'
+        await self.execute(statement, (value,))
 
     def schema(self, name):
         return Schema(self, name)
