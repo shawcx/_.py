@@ -10,8 +10,25 @@ import base64
 import binascii
 import functools
 import hashlib
+import urllib.parse
 
 import _
+
+
+# based on tornado.web.authenticated
+def _next(handler):
+    if handler.request.method in ("GET","HEAD"):
+        url = handler.get_login_url()
+        if "?" not in url:
+            if urllib.parse.urlsplit(url).scheme:
+                next_url = handler.request.full_url()
+            else:
+                next_url = handler.request.uri
+            url += "?" + urllib.parse.urlencode(dict(next=next_url))
+        handler.redirect(url)
+    else:
+        raise _.HTTPError(403)
+
 
 # generic decorator to callback to a function
 # return true to allow the method to be called
@@ -22,7 +39,7 @@ def filter(filter_func):
         def wrapper(self, *args, **kwds):
             if filter_func(self):
                 return method(self, *args, **kwds)
-            raise _.HTTPError(403)
+            _next(self)
         return wrapper
     return _filter
 
@@ -38,7 +55,7 @@ def filter_user(filter_func):
             if self.current_user:
                 if filter_func(self.current_user):
                     return method(self, *args, **kwds)
-            raise _.HTTPError(403)
+            _next(self)
         return wrapper
     return _filter_user
 
