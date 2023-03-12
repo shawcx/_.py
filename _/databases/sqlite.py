@@ -109,12 +109,15 @@ class SQLite(_.databases.Database):
         await cursor.close()
         return dict(row) if row else None
 
-    async def count(self, table, where=None):
+    async def count(self, table, field=None, value=None):
         statement = f'SELECT count(*) FROM {table}'
-
+        args = None
+        if field:
+            statement += f' WHERE {field}={self.PH}'
+            args = (value,)
         try:
             cursor = await self.conn.cursor()
-            await cursor.execute(statement)
+            await cursor.execute(statement, args)
             result = await cursor.fetchone()
             return result[0]
         except sqlite3.ProgrammingError as e:
