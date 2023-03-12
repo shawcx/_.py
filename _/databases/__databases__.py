@@ -31,7 +31,10 @@ class Database:
         raise NotImplementedError
 
     async def insert(self, table, id_column, values):
-        raise NotImplementedError
+        columns = ','.join(f'"{s}"' for s in values.keys())
+        placeholder = ','.join(self.PH * len(values))
+        statement = f'INSERT INTO {table} ({columns}) VALUES ({placeholder})'
+        return await self.execute(statement, tuple(values.values()))
 
     async def insert_unique(self, table, id_column, values):
         raise NotImplementedError
