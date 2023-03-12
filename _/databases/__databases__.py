@@ -10,6 +10,8 @@ import _
 
 
 class Database:
+    PH = None
+
     @classmethod
     async def _(cls, name, **kwds):
         self = cls()
@@ -41,12 +43,11 @@ class Database:
         raise NotImplementedError
 
     async def delete(self, table, id_column, value):
-        statement = f'DELETE FROM {table} WHERE {id_column}=?'
+        statement = f'DELETE FROM {table} WHERE {id_column}={self.PH}'
         await self.execute(statement, (value,))
 
     def schema(self, name):
         return Schema(self, name)
-
 
 
 class Schema:
@@ -66,6 +67,7 @@ class Schema:
                 await self._parent.execute(statement)
             except _.error as e:
                 raise _.error('%s: %s', self._name, e)
+
 
 class Table:
     def __init__(self, name):
@@ -125,6 +127,7 @@ class Table:
             spec.append(f'UNIQUE ("{unique}")')
         spec = ',\n  '.join(spec)
         return f'CREATE TABLE IF NOT EXISTS {self._name.lower()} (\n  {spec}\n  )'
+
 
 class Column:
     def __init__(self, table, name):

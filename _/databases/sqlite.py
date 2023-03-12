@@ -22,6 +22,8 @@ logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
 
 class SQLite(_.databases.Database):
+    PH = '?'
+
     async def init(self, name, path=None, schema=None):
         self.conn = None
 
@@ -66,11 +68,11 @@ class SQLite(_.databases.Database):
             await self.conn.close()
 
     async def execute(self, statement, args=None):
-        lastrow_id = 0
+        lastrowid = 0
         cursor = await self.conn.cursor()
         try:
             await cursor.execute(statement, args)
-            lastrow_id = cursor.lastrow_id
+            lastrowid = cursor.lastrowid
         except sqlite3.OperationalError as e:
             raise _.error('Operational error: %s', e)
         except sqlite3.ProgrammingError as e:
@@ -80,7 +82,7 @@ class SQLite(_.databases.Database):
         finally:
             await cursor.close()
         await self.conn.commit()
-        return lastrow_id
+        return lastrowid
 
     async def find(self, table, params=None, sort=None):
         statement = f'SELECT * FROM {table}'
@@ -96,7 +98,7 @@ class SQLite(_.databases.Database):
         return rows
 
     async def find_one(self, table, id_column, value):
-        statement = f'SELECT * FROM {table} WHERE {id_column}=? LIMIT 1'
+        statement = f'SELECT * FROM {table} WHERE {id_column}={self.PH} LIMIT 1'
 
         try:
             cursor = await self.conn.cursor()
@@ -123,22 +125,19 @@ class SQLite(_.databases.Database):
             await cursor.close()
 
     async def insert(self, table, id_column, values):
-        columns = ','.join(f'"{s}"' for s in values.keys())
-        placeholder = ','.join('?' * len(values))
-        statement = f'INSERT INTO {table} ({columns}) VALUES ({placeholder})'
-        lastrow_id = await self.execute(statement, tuple(values.values()))
+        lastrowid = await super().insert(table, id_column, values)
         if id_column not in values:
-            values[id_column] = lastrow_id
-        return lastrow_id
+            values[id_column] = lastrowid
+        return lastrowid
 
     async def update(self, table, id_column, values):
         where = values.get(id_column)
-        columns = ','.join(f'{s}=?' for s in values.keys())
-        statement = f'UPDATE {table} SET {columns} WHERE {id_column}=?'
+        columns = ','.join(f'{s}={self.PH}' for s in values.keys())
+        statement = f'UPDATE {table} SET {columns} WHERE {id_column}={self.PH}'
         return await self.execute(statement, tuple(values.values()) + (where,))
 
     async def upsert(self, table, values):
         columns = ','.join(f'"{s}"' for s in values.keys())
-        placeholder = ','.join('?' * len(values))
+        placeholder = ','.join(self.PH * len(values))
         statement = f'INSERT OR REPLACE INTO {table} ({columns}) VALUES ({placeholder})'
         return await self.execute(statement, tuple(values.values()))

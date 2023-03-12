@@ -55,20 +55,13 @@ class Postgres(_.databases.Database):
         return cursor.fetchone()
 
     async def insert(self, table, id_column, values):
-        columns = ','.join('"%s"' % k.lower() for k in values.keys())
-        placeholder = ','.join('%s' for x in xrange(len(values)))
-        statement = f'INSERT INTO {table} ({columns}) VALUES ({placeholder})'
-
-        cursor = await self.execute(statement, values.values())
-
+        cursor = await super().insert(table, id_column, values)
         rows = cursor.rowcount
         if rows is None:
             rows = -1
-
         if id_column not in values:
             cursor = await self.execute('SELECT lastval()')
             values[id_column] = cursor.fetchone()[0]
-
         return rows
 
     async def update(self, table, id_column, values):
