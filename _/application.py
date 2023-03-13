@@ -138,7 +138,7 @@ class Application(tornado.web.Application):
 
     def _record_handler(self, name, cls):
         self._records_patterns.append(
-            (f'/{name}/({cls.__name__})/(.*)', cls)
+            (f'/{name}/({cls.__name__})(?:/(.*))?', cls)
             )
 
     def _login_handler(self, name, cls):
