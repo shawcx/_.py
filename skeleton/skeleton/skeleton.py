@@ -19,22 +19,26 @@ class Skeleton(_.Application):
 
         self.db   = _.databases.sqlite
 
-        audio = _.data.audio(
-            device='name',
-            samples=2048,
+        skel = _.data.skel(
+            field1='name',
+            field2=100,
+            field3=200,
+            lat=1.2,
+            lng=3.4,
             )
+
         print()
         print('#' * 20)
-        print('repr:', repr(audio))
-        print('dict:', audio.dict())
-        print('json:', audio.json())
-        await audio.delete()
-        await audio.insert()
-        await audio.update()
-        await audio.upsert()
-        print('find:', await _.data.audio.find_one('name'))
-        print('count:', await _.data.audio.count())
-        print('count: samples == 2048:', await audio.count('samples', 2048))
+        print('repr:', repr(skel))
+        print('dict:', skel.dict())
+        print('json:', skel.json())
+        await skel.delete()
+        await skel.insert()
+        await skel.update()
+        await skel.upsert()
+        print('find:', await _.data.skel.find_one('name'))
+        print('count:', await _.data.skel.count())
+        print('count: samples == 200:', await skel.count('field3', 200))
         print('#' * 20)
         print()
         print('#' * 20)
