@@ -64,8 +64,8 @@ class Data(_.records.Record):
                     members['primary_key'] = field.name
 
                 unique = field.metadata.get('unique', False)
-                if unique:
-                    table.unique(field.name)
+                if unique is not False:
+                    table.unique(field.name, unique)
 
                 reference = field.metadata.get('ref', None)
                 if reference:
@@ -93,9 +93,10 @@ class Data(_.records.Record):
         return dataclass
 
     _column_mapping = {
-        str:  'TEXT',
-        int:  'INTEGER',
-        bool: 'BOOLEAN',
+        str:   'TEXT',
+        int:   'INTEGER',
+        float: 'REAL',
+        bool:  'BOOLEAN',
         }
 
 
@@ -159,8 +160,11 @@ class DataContainer(_.Container):
         return dataclasses.field(**kwds)
 
     @staticmethod
-    def uniq(arg=None):
-        kwds = {'metadata':{'unique':True}}
+    def uniq(group=None, arg=None):
+        if not isinstance(group, str):
+            arg = group
+            group = None
+        kwds = {'metadata':{'unique':group}}
         if isinstance(arg, dataclasses.Field):
             kwds['metadata'].update(arg.metadata)
             kwds['default'] = arg.default

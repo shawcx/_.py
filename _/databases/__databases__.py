@@ -6,6 +6,8 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import collections
+
 import _
 
 
@@ -79,7 +81,7 @@ class Table:
         self._columns      = {}
         self._primary_keys = {}
         self._foreign_keys = {}
-        self._unique       = {}
+        self._unique       = collections.defaultdict(set)
 
     def column(self, column_name):
         if column_name not in self._columns:
@@ -101,8 +103,8 @@ class Table:
         self._foreign_keys[key] = True
         return self
 
-    def unique(self, key):
-        self._unique[key] = True
+    def unique(self, key, group=None):
+        self._unique[group].add(key)
         return self
 
     def apply(self):
@@ -125,9 +127,12 @@ class Table:
         if self._primary_keys: # may be None
             primary_keys = '","'.join(self._primary_keys.keys())
             spec.append(f'PRIMARY KEY ("{primary_keys}")')
-        unique = '","'.join(k for k,v in self._unique.items() if v)
-        if unique:
-            spec.append(f'UNIQUE ("{unique}")')
+
+        for group,names in self._unique.items():
+            unique = '","'.join(names)
+            if unique:
+                spec.append(f'UNIQUE ("{unique}")')
+
         spec = ',\n  '.join(spec)
         return f'CREATE TABLE IF NOT EXISTS {self._name.lower()} (\n  {spec}\n  )'
 
