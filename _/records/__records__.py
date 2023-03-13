@@ -131,8 +131,8 @@ class HandlerInterface(_.handlers.Protected):
 
     @_.auth.protected
     async def get(self, record, record_id):
-        if hasattr(self._record_cls, 'get'):
-            return self._record_cls.get(self, record, record_id)
+        if not hasattr(self, '_db'):
+            raise _.HTTPError(405)
 
         if not record_id:
             records = await self._db.find(record)
@@ -144,30 +144,46 @@ class HandlerInterface(_.handlers.Protected):
             self.write(record)
 
     @_.auth.protected
-    async def put(self, record, record_id):
-        if hasattr(self._record_cls, 'put'):
-            return self._record_cls.put(self, record, record_id)
+    async def post(self, record, record_id):
+        if not hasattr(self, '_db'):
+            raise _.HTTPError(405)
 
         try:
             data = json.loads(self.request.body)
         except json.decoder.JSONDecodeError:
             raise _.HTTPError(500)
 
-        await _.wait(self._record.put(record_id, data, self.request))
+        record = self._record.from_json(data)
+
+        self.set_status(204)
+        await record.insert()
+
+    @_.auth.protected
+    async def put(self, record, record_id):
+        if not hasattr(self, '_db'):
+            raise _.HTTPError(405)
+
+        try:
+            data = json.loads(self.request.body)
+        except json.decoder.JSONDecodeError:
+            raise _.HTTPError(500)
+
+        record = self._record.from_json(data)
+
+        await record.upsert()
         self.set_status(204)
 
     @_.auth.protected
     async def delete(self, record, record_id):
-        if hasattr(self._record_cls, 'delete'):
-            return self._record_cls.delete(self, record, record_id)
+        if not hasattr(self, '_db'):
+            raise _.HTTPError(405)
 
         if not record_id:
             raise _.HTTPError(500)
 
-        data = await self._db.find_one(record, self._record._primary_key, record_id)
-        if not data:
+        record = self._record.find_one(record_id)
+        if not record:
             raise _.HTTPError(404)
 
-        await self._db.delete(record, self._record._primary_key, record_id)
-        await _.wait(self._record.delete(record_id, data, self.request))
+        await record.delete()
         self.set_status(204)
