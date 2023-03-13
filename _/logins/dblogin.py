@@ -6,6 +6,7 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import json
 import logging
 
 import _
@@ -82,7 +83,7 @@ class DbLogin(_.logins.Login):
             if callback:
                 await _.wait(callback(name, record))
 
-            await cls._db.upsert(cls._table, cls._username, record)
+            await cls._db.upsert(cls._table, record)
             _.application.stop()
 
         if getattr(_.args, f'{prefix}list_users'):
@@ -145,18 +146,24 @@ class DBLoginRecords(_.handlers.Protected):
 
     # UPDATE
     @_.auth.protected
-    async def put(self, name, username=None):
+    async def put(self, username=None):
         try:
             user = json.loads(self.request.body)
         except json.decoder.JSONDecodeError:
             raise _.HTTPError(500)
 
         username = user.get(self._username, None)
-        password = user.get(self._password, None)
+        password = user.pop(self._password, None)
         if not username or not password:
             raise _.HTTPError(500)
 
-        record = dict((k,None) for k in _.config[self._name])
+        entry = dict(_.config[self._name])
+        prune = list(entry.keys()) + [self._username, self._password]
+        for key in list(user.keys()):
+            if key not in prune:
+                user.pop(key)
+
+        record = dict((k,None) for k in entry)
         record.pop('database', None)
         record.pop('table',    None)
         record.update(user)
@@ -167,7 +174,7 @@ class DBLoginRecords(_.handlers.Protected):
         if callback:
             await _.wait(callback(self._name, record))
 
-        if record[self._password] == password:
+        if not self._password not in record:
             password = _.auth.simple_hash(username + password)
             record[self._password] = password
 
@@ -176,7 +183,7 @@ class DBLoginRecords(_.handlers.Protected):
 
     # DELETE
     @_.auth.protected
-    async def delete(self, name, username=None):
+    async def delete(self, username=None):
         self.set_status(204)
         await self._db.delete(self._table, self._username, username)
 

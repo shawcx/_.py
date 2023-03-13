@@ -1,7 +1,9 @@
 
 import dataclasses
 import functools
+import inspect
 import json
+import uuid
 
 import _
 
@@ -38,11 +40,13 @@ class Data(_.records.Record):
             setattr(module, name, attr)
 
     def _dataclass(self, name, dataclass):
+        for member,member_cls in dataclass.__annotations__.items():
+            if not hasattr(dataclass, member):
+                setattr(dataclass, member, None)
+
         # make class a dataclass if it isn't already
         if not dataclasses.is_dataclass(dataclass):
-            dataclass = dataclasses.dataclass(init=False, kw_only=True)(dataclass)
-        # add in the keyword init parent class
-        dataclass = type(name, (dataclass,_DataClass), {})
+            dataclass = dataclasses.dataclass(init=True, kw_only=True)(dataclass)
 
         members = dict(
             name       = name,
@@ -93,17 +97,12 @@ class Data(_.records.Record):
         return dataclass
 
     _column_mapping = {
-        str:   'TEXT',
-        int:   'INTEGER',
-        float: 'REAL',
-        bool:  'BOOLEAN',
+        str:       'TEXT',
+        int:       'INTEGER',
+        float:     'REAL',
+        bool:      'BOOLEAN',
+        uuid.UUID: 'UUID',
         }
-
-
-class _DataClass:
-    def __init__(self, **kwds):
-        for kwd in kwds:
-            setattr(self, kwd, kwds[kwd])
 
 
 class Interface(_.records.Interface):
@@ -121,6 +120,10 @@ class DataContainer(_.Container):
         super().__init__()
         self._ignore = set()
         self._handler = {}
+
+    @staticmethod
+    def json(obj, **kwds):
+        return json.dumps(obj, cls=Data.Json, separators=(',',':'), **kwds)
 
     # decorator for adding custom handlers for message types
     def handler(self, _dataclass):
@@ -150,17 +153,20 @@ class DataContainer(_.Container):
         return cls
 
     @staticmethod
-    def pkey(arg=None):
+    def pkey(arg=dataclasses.MISSING):
         kwds = {'metadata':{'pkey':True}}
         if isinstance(arg, dataclasses.Field):
             kwds['metadata'].update(arg.metadata)
             kwds['default'] = arg.default
-        elif arg is not None:
+            kwds['default_factory'] = arg.default_factory
+        elif inspect.isfunction(arg):
+            kwds['default_factory'] = arg
+        elif arg is not dataclasses.MISSING:
             kwds['default'] = arg
         return dataclasses.field(**kwds)
 
     @staticmethod
-    def uniq(group=None, arg=None):
+    def uniq(group=None, arg=dataclasses.MISSING):
         if not isinstance(group, str):
             arg = group
             group = None
@@ -168,7 +174,10 @@ class DataContainer(_.Container):
         if isinstance(arg, dataclasses.Field):
             kwds['metadata'].update(arg.metadata)
             kwds['default'] = arg.default
-        elif arg is not None:
+            kwds['default_factory'] = arg.default_factory
+        elif inspect.isfunction(arg):
+            kwds['default_factory'] = arg
+        elif arg is not dataclasses.MISSING:
             kwds['default'] = arg
         return dataclasses.field(**kwds)
 

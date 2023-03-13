@@ -16,9 +16,9 @@ class Template(tornado.web.RequestHandler):
         self.kwds = kwds
         self.template = template + '.html'
 
-    def get(self, template=None):
+    def get(self, template=None, *args):
         template = template + '.html' if template else self.template
-        self.render(template, **self.kwds)
+        self.render(template, extra=args, **self.kwds)
 
 
 class Protected(Template):
@@ -36,5 +36,5 @@ class Protected(Template):
         return self.session
 
     @_.auth.current_user
-    def get(self, template=None):
-        super().get(template)
+    def get(self, template=None, *args):
+        super().get(template, *args)

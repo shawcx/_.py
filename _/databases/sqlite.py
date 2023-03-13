@@ -84,21 +84,25 @@ class SQLite(_.databases.Database):
         await self.conn.commit()
         return lastrowid
 
-    async def find(self, table, params=None, sort=None):
+    async def find(self, table, params=None, order=None):
         statement = f'SELECT * FROM {table}'
+        args = []
         if params:
-            statement += ' WHERE ' + params
-        if sort:
-            statement += ' ' + sort
+            statement += f' WHERE {params[0]}={self.PH}'
+            args.append(params[1])
+        if order:
+            statement += f' ORDER BY {order} DESC'
 
         cursor = await self.conn.cursor()
-        await cursor.execute(statement)
+        await cursor.execute(statement, tuple(args))
         rows = await cursor.fetchall()
         await cursor.close()
         return rows
 
-    async def find_one(self, table, id_column, value):
+    async def find_one(self, table, id_column, value, order=None):
         statement = f'SELECT * FROM {table} WHERE {id_column}={self.PH} LIMIT 1'
+        if order:
+            statement += f' ORDER BY {order} DESC'
 
         try:
             cursor = await self.conn.cursor()

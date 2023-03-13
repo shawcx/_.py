@@ -7,6 +7,7 @@
 #
 
 import collections
+import logging
 
 import _
 
@@ -26,10 +27,10 @@ class Database:
     async def close(self):
         pass
 
-    async def find(self, table, params=None, sort=None):
+    async def find(self, table, params=None, order=None):
         raise NotImplementedError
 
-    async def find_one(self, table, id_column, _id):
+    async def find_one(self, table, id_column, _id, order=None):
         raise NotImplementedError
 
     async def insert(self, table, id_column, values):

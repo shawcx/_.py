@@ -46,13 +46,6 @@ class Record:
     def load(self, module):
         raise NotImplementedError
 
-
-class Interface:
-    def __init__(self, *args, **kwds):
-        self.__dict__['_record'] = self._record_cls()
-        for kwd in kwds:
-            setattr(self._record, kwd, kwds[kwd])
-
     class Json(json.JSONEncoder):
         def default(self, obj):
             if isinstance(obj, bytes):
@@ -65,6 +58,12 @@ class Interface:
                 return str(obj)
             return json.JSONEncoder.default(self, obj)
 
+
+class Interface:
+    def __init__(self, *args, **kwds):
+        self.__dict__['_record'] = self._record_cls(*args, **kwds)
+        for kwd in kwds:
+            setattr(self._record, kwd, kwds[kwd])
     @classmethod
     def from_json(cls, msg):
         raise NotImplementedError
@@ -74,7 +73,7 @@ class Interface:
         raise NotImplementedError
 
     def json(self, **kwds):
-        return json.dumps(self, cls=self.Json, separators=(',',':'), **kwds)
+        return json.dumps(self, cls=Record.Json, separators=(',',':'), **kwds)
 
     def dict(self):
         return self.as_dict(self)
@@ -94,13 +93,13 @@ class Interface:
 
 class DatabaseInterface:
     @classmethod
-    async def find(cls, params=None, sort=None):
-        rows = await cls._db.find(cls._name)
+    async def find(cls, params=None, order=None):
+        rows = await cls._db.find(cls._name, params, order)
         return [cls(**r) for r in rows]
 
     @classmethod
-    async def find_one(cls, value):
-        row = await cls._db.find_one(cls._name, cls._primary_key, value)
+    async def find_one(cls, value, order=None):
+        row = await cls._db.find_one(cls._name, cls._primary_key, value, order)
         return cls(**row) if row else None
 
     @classmethod
@@ -128,62 +127,66 @@ class DatabaseInterface:
 class HandlerInterface(_.handlers.Protected):
     def initialize(self):
         self.set_header('Content-Type', 'application/json; charset=UTF-8')
+        if self.request.body:
+            try:
+                self.json = json.loads(self.request.body)
+            except:
+                raise _.HTTPError(500)
+        else:
+            self.json = None
 
     @_.auth.protected
-    async def get(self, record, record_id):
+    async def get(self, record_id):
         if not hasattr(self, '_db'):
             raise _.HTTPError(405)
 
         if not record_id:
-            records = await self._db.find(record)
-            self.write(dict(data=[dict(r) for r in records]))
+            records = await self._record.find()
+            self.write(dict(data=[r.dict() for r in records]))
         else:
-            record = await self._db.find_one(record, self._record._primary_key, record_id)
+            record = await self._record.find_one(record_id)
             if record is None:
                 raise _.HTTPError(404)
             self.write(record)
 
     @_.auth.protected
-    async def post(self, record, record_id):
+    async def post(self, record_id, record=None):
         if not hasattr(self, '_db'):
             raise _.HTTPError(405)
-
+        if record is None:
+            record = self._record(**self.json)
         try:
-            data = json.loads(self.request.body)
-        except json.decoder.JSONDecodeError:
-            raise _.HTTPError(500)
-
-        record = self._record.from_json(data)
-
+            await record.insert()
+        except _.error as e:
+            raise _.HTTPError(409, e) from None
         self.set_status(204)
-        await record.insert()
+        return record
 
     @_.auth.protected
-    async def put(self, record, record_id):
+    async def put(self, record_id, record=None):
         if not hasattr(self, '_db'):
             raise _.HTTPError(405)
-
+        if record is None:
+            record = self._record(**self.json)
         try:
-            data = json.loads(self.request.body)
-        except json.decoder.JSONDecodeError:
-            raise _.HTTPError(500)
-
-        record = self._record.from_json(data)
-
-        await record.upsert()
+            await record.upsert()
+        except _.error as e:
+            raise _.HTTPError(500, e) from None
         self.set_status(204)
+        return record
 
     @_.auth.protected
-    async def delete(self, record, record_id):
+    async def delete(self, record_id):
         if not hasattr(self, '_db'):
             raise _.HTTPError(405)
 
         if not record_id:
             raise _.HTTPError(500)
 
-        record = self._record.find_one(record_id)
+        record = await self._record.find_one(record_id)
         if not record:
             raise _.HTTPError(404)
 
         await record.delete()
         self.set_status(204)
+        return record
