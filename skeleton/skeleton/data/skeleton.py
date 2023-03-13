@@ -22,7 +22,7 @@ class custom:
 
 @_.data.handler(custom)
 class custom_handler:
-    async def get(self, record, record_id):
+    async def get(self, record_id):
         if not record_id:
             records = []
             for d in ['a','b','c']:
