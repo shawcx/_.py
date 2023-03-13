@@ -67,7 +67,7 @@ class Redis(_.caches.Cache):
 
 class RedisSessions(_.handlers.Protected):
     @_.auth.protected
-    async def get(self, name, session_id=None):
+    async def get(self, session_id=None):
         if session_id:
             session = await self._redis.get(f'session/{session_id}')
             if not session:
@@ -84,7 +84,7 @@ class RedisSessions(_.handlers.Protected):
             self.write({'data':data})
 
     @_.auth.protected
-    async def delete(self, name, session_id=None):
+    async def delete(self, session_id=None):
         self.set_status(204)
         if session_id:
             await self._redis.delete(f'session/{session_id}')

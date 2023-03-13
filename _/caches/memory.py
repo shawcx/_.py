@@ -45,7 +45,7 @@ class Memory(_.caches.Cache):
 
 class MemorySessions(_.handlers.Protected):
     @_.auth.protected
-    async def get(self, name, session_id=None):
+    async def get(self, session_id=None):
         if session_id:
             session = self._mem[session_id]
             if not session:
@@ -60,7 +60,7 @@ class MemorySessions(_.handlers.Protected):
             self.write({'data':data})
 
     @_.auth.protected
-    async def delete(self, name, session_id=None):
+    async def delete(self, session_id=None):
         self.set_status(204)
         if session_id:
             del self._mem[session_id]

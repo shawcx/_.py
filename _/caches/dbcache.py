@@ -93,7 +93,7 @@ class DbCache(_.caches.Cache):
 
 class DbCacheSessions(_.handlers.Protected):
     @_.auth.protected
-    async def get(self, name, session_id=None):
+    async def get(self, session_id=None):
         if session_id:
             record = await self._db.find_one(self._table, self._session_id, session_id)
             self.write(record)
@@ -105,7 +105,7 @@ class DbCacheSessions(_.handlers.Protected):
             self.write({'data':data})
 
     @_.auth.protected
-    async def delete(self, name, session_id=None):
+    async def delete(self, session_id=None):
         self.set_status(204)
         if session_id:
             await self._db.delete(self._table, self._session_id, session_id)
