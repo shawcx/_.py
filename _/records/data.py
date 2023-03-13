@@ -14,7 +14,7 @@ class Data(_.records.Record):
         self._container = DataContainer()
         setattr(_, self.name, self._container)
 
-        await super(Data, self).init(module, database)
+        await super().init(module, database)
 
     def load(self, module):
         for name in dir(module):

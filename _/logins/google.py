@@ -17,4 +17,4 @@ class Google(OAuth2, _.logins.Login):
         cls.scope = ['email']
         cls.extra = {'approval_prompt': 'auto'}
 
-        await super(Google, cls).init(name, **kwds)
+        await super().init(name, **kwds)

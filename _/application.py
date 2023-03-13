@@ -124,7 +124,7 @@ class Application(tornado.web.Application):
     async def __listen(self, patterns, **kwds):
         # call the Tornado Application init here to give children a chance
         # to initialize patterns and settings
-        super(Application, self).__init__(patterns, **self.settings)
+        super().__init__(patterns, **self.settings)
 
         if 'xheaders' not in kwds:
             kwds['xheaders'] = True

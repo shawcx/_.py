@@ -73,7 +73,7 @@ class DbCache(_.caches.Cache):
         return secret
 
     async def save_session(self, session):
-        super(DbCache, self).save_session(session)
+        super().save_session(session)
         await self.db.upsert(self._table, session)
 
     async def load_session(self, session_id):

@@ -48,7 +48,7 @@ class Redis(_.caches.Cache):
         return secret
 
     async def save_session(self, session):
-        session_id = super(Redis, self).save_session(session)
+        session_id = super().save_session(session)
         async with self.redis.pipeline(transaction=True) as pipe:
             await pipe.set(f'session/{session_id}', json.dumps(session))
             await pipe.expire(f'session/{session_id}', self._expires * 3600)

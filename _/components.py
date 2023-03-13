@@ -15,7 +15,7 @@ import _
 
 class Component(type(_)):
     def __init__(self, module):
-        super(Component, self).__init__(module.__name__)
+        super().__init__(module.__name__)
         self.module = module
         self._components = {}
 

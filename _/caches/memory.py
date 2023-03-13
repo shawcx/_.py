@@ -30,7 +30,7 @@ class Memory(_.caches.Cache):
         return os.urandom(32)
 
     def save_session(self, session):
-        session_id = super(Memory, self).save_session(session)
+        session_id = super().save_session(session)
         self.mem[session_id] = json.dumps(session)
 
     async def load_session(self, session_id):

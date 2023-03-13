@@ -37,4 +37,4 @@ class Protected(Template):
 
     @_.auth.current_user
     def get(self, template=None):
-        super(Protected, self).get(template)
+        super().get(template)
