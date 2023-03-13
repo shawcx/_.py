@@ -111,8 +111,8 @@ class Interface(_.records.Interface):
         return cls(**json.loads(msg))
 
     @classmethod
-    def as_dict(cls, _record=None):
-        return dataclasses.asdict(_record)
+    def as_dict(cls, obj):
+        return dataclasses.asdict(obj._record)
 
 
 class DataContainer(_.Container):
@@ -149,18 +149,24 @@ class DataContainer(_.Container):
         return cls
 
     @staticmethod
-    def pkey(arg=True):
-        meta = {'pkey':True}
+    def pkey(arg=None):
+        kwds = {'metadata':{'pkey':True}}
         if isinstance(arg, dataclasses.Field):
-            meta.update(arg.metadata)
-        return dataclasses.field(metadata=meta)
+            kwds['metadata'].update(arg.metadata)
+            kwds['default'] = arg.default
+        elif arg is not None:
+            kwds['default'] = arg
+        return dataclasses.field(**kwds)
 
     @staticmethod
-    def uniq(arg=True):
-        meta = {'unique':True}
+    def uniq(arg=None):
+        kwds = {'metadata':{'unique':True}}
         if isinstance(arg, dataclasses.Field):
-            meta.update(arg.metadata)
-        return dataclasses.field(metadata=meta)
+            kwds['metadata'].update(arg.metadata)
+            kwds['default'] = arg.default
+        elif arg is not None:
+            kwds['default'] = arg
+        return dataclasses.field(**kwds)
 
     @staticmethod
     def ref(foreign, key=None):

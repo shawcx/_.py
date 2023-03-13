@@ -58,7 +58,7 @@ class Interface:
             if isinstance(obj, bytes):
                 return base64.b64encode(obj).decode('ascii')
             if hasattr(obj, '_record_cls'):
-                return obj.as_dict(obj._record)
+                return obj.as_dict(obj)
             if isinstance(obj, datetime.datetime):
                 return str(obj)
             if isinstance(obj, uuid.UUID):
@@ -70,14 +70,14 @@ class Interface:
         raise NotImplementedError
 
     @classmethod
-    def as_dict(cls, _record=None):
+    def as_dict(cls, obj):
         raise NotImplementedError
 
     def json(self, **kwds):
         return json.dumps(self, cls=self.Json, separators=(',',':'), **kwds)
 
     def dict(self):
-        return self.as_dict(self._record)
+        return self.as_dict(self)
 
     def __getattr__(self, name):
         return getattr(self._record, name)

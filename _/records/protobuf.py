@@ -121,9 +121,9 @@ class Interface(_.records.Interface):
         return cls(_record)
 
     @classmethod
-    def as_dict(cls, _record):
+    def as_dict(cls, obj):
         return google.protobuf.json_format.MessageToDict(
-            _record,
+            obj._record,
             including_default_value_fields = True,
             preserving_proto_field_name    = True,
             )
