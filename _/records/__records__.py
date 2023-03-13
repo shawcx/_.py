@@ -48,23 +48,36 @@ class Record:
 
 
 class Interface:
+    def __init__(self, *args, **kwds):
+        self.__dict__['_record'] = self._record_cls()
+        for kwd in kwds:
+            setattr(self._record, kwd, kwds[kwd])
+
     class Json(json.JSONEncoder):
         def default(self, obj):
             if isinstance(obj, bytes):
                 return base64.b64encode(obj).decode('ascii')
             if hasattr(obj, '_record_cls'):
-                return obj.dict(obj._record)
+                return obj.as_dict(obj._record)
             if isinstance(obj, datetime.datetime):
                 return str(obj)
             if isinstance(obj, uuid.UUID):
                 return str(obj)
             return json.JSONEncoder.default(self, obj)
 
-    def dump(self, **kwds):
+    @classmethod
+    def from_json(cls, msg):
+        raise NotImplementedError
+
+    @classmethod
+    def as_dict(cls, _record=None):
+        raise NotImplementedError
+
+    def json(self, **kwds):
         return json.dumps(self, cls=self.Json, separators=(',',':'), **kwds)
 
-    def asdict(self):
-        return self.dict(self._record)
+    def dict(self):
+        return self.as_dict(self._record)
 
     def __getattr__(self, name):
         return getattr(self._record, name)
@@ -75,34 +88,37 @@ class Interface:
     def __str__(self):
         return self._record.__str__()
 
+    def __repr__(self):
+        return self._record.__repr__()
+
 
 class DatabaseInterface:
     @classmethod
     async def find(cls, params=None, sort=None):
         rows = await cls._db.find(cls._name)
-        return [cls._record_cls(**r) for r in rows]
+        return [cls(**r) for r in rows]
 
     @classmethod
     async def find_one(cls, value):
         row = await cls._db.find_one(cls._name, cls._primary_key, value)
-        return cls._record_cls(**row) if row else None
+        return cls(**row) if row else None
 
     @classmethod
     async def count(cls, field=None, value=None):
         return await cls._db.count(cls._name, field, value)
 
     async def insert(self):
-        values = self.asdict()
+        values = self.dict()
         row = await self._db.insert(self._name, self._primary_key, values)
         return row
 
     async def update(self):
-        values = self.asdict()
+        values = self.dict()
         row = await self._db.update(self._name, self._primary_key, values)
         return row
 
     async def upsert(self):
-        values = self.asdict()
+        values = self.dict()
         row = await self._db.upsert(self._name, values)
 
     async def delete(self):

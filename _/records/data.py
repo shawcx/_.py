@@ -21,6 +21,9 @@ class Data(_.records.Record):
             if name.startswith('__'):
                 continue
 
+            if name in self._container._ignore:
+                continue
+
             attr = getattr(module, name)
 
             # ignore objects that are not classes
@@ -34,19 +37,25 @@ class Data(_.records.Record):
             attr = self._dataclass(name, attr)
             setattr(module, name, attr)
 
-    def _dataclass(self, name, cls):
+    def _dataclass(self, name, dataclass):
         # make class a dataclass if it isn't already
-        if not dataclasses.is_dataclass(cls):
-            cls = dataclasses.dataclass(init=False, kw_only=True)(cls)
+        if not dataclasses.is_dataclass(dataclass):
+            dataclass = dataclasses.dataclass(init=False, kw_only=True)(dataclass)
+        # add in the keyword init parent class
+        dataclass = type(name, (dataclass,_DataClass), {})
 
-        members = dict(name=name)
-        types   = [Interface]
-        if not hasattr(cls, f'_{cls.__name__}__no_db'):
+        members = dict(
+            name       = name,
+            record_cls = dataclass
+            )
+
+        types = [Interface]
+        if not hasattr(dataclass, f'_{dataclass.__name__}__no_db'):
             members.update(dict(db=self.db, table=name))
             types.append(_.records.DatabaseInterface)
 
             table = self.schema.table(name)
-            for field in dataclasses.fields(cls):
+            for field in dataclasses.fields(dataclass):
                 column = table.column(field.name)
                 column.type(Data._column_mapping.get(field.type))
 
@@ -63,21 +72,25 @@ class Data(_.records.Record):
                     key = field.metadata.get('key', None)
                     column.references(reference.__name__, key)
 
-            if hasattr(cls, f'_{cls.__name__}__no_pkey'):
+            if hasattr(dataclass, f'_{dataclass.__name__}__no_pkey'):
                 table.primary_key(None)
 
-        cls = type(name, (cls,_DataClass), {})
-
-        members['record_cls'] = cls
         record = type(name, tuple(types), _.prefix(members))
         self._container[name] = record
 
-        if not hasattr(cls, f'_{cls.__name__}__no_handler'):
+        if not hasattr(dataclass, f'_{dataclass.__name__}__no_handler'):
             members['record'] = record
-            record_handler = type(name, (_.records.HandlerInterface,), _.prefix(members))
+
+            # check if a custom handler was defined
+            data_handler = self._container._handler.get(dataclass.__name__)
+            types = [data_handler] if data_handler else []
+            # add the base records handler
+            types.append(_.records.HandlerInterface)
+
+            record_handler = type(name, tuple(types), _.prefix(members))
             _.application._record_handler(self.name, record_handler)
 
-        return cls
+        return dataclass
 
     _column_mapping = {
         str:  'TEXT',
@@ -86,28 +99,36 @@ class Data(_.records.Record):
         }
 
 
-class Interface(_.records.Interface):
-    def __init__(self, *args, **kwds):
-        self.__dict__['_record'] = self._record_cls()
-        for kwd in kwds:
-            setattr(self._record, kwd, kwds[kwd])
-
-    @classmethod
-    def load(cls, msg):
-        return cls(**json.loads(msg))
-
-    @classmethod
-    def dict(cls, _record=None):
-        return dataclasses.asdict(_record)
-
-
 class _DataClass:
     def __init__(self, **kwds):
         for kwd in kwds:
             setattr(self, kwd, kwds[kwd])
 
 
+class Interface(_.records.Interface):
+    @classmethod
+    def from_json(cls, msg):
+        return cls(**json.loads(msg))
+
+    @classmethod
+    def as_dict(cls, _record=None):
+        return dataclasses.asdict(_record)
+
+
 class DataContainer(_.Container):
+    def __init__(self):
+        super().__init__()
+        self._ignore = set()
+        self._handler = {}
+
+    # decorator for adding custom handlers for message types
+    def handler(self, _dataclass):
+        def wrap(_handler):
+            self._ignore.add(_handler.__name__)
+            self._handler[_dataclass.__name__] = _handler
+            return _handler
+        return wrap
+
     @staticmethod
     def dump(obj):
         return Interface.dump(obj)

@@ -34,7 +34,7 @@ class error(Exception):
 class Container(collections.UserDict):
     def __getattr__(self, name):
         try:
-            return self.get(name)
+            return self[name]
         except KeyError:
             raise AttributeError(name) from None
 

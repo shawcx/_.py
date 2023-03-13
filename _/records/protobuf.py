@@ -18,14 +18,16 @@ from . import Protobuf_pb2
 
 
 class Protobuf(_.records.Record):
-    _proto_handlers = {}
-
-    def load(self, module):
+    async def init(self, module, database=None):
+        # setup the container beforehand so the data module can use data decorators
         if hasattr(_, self.name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.name, module.__name__)
-        self._container = _.Container()
+        self._container = ProtobufContainer()
         setattr(_, self.name, self._container)
 
+        await super().init(module, database)
+
+    def load(self, module):
         # iterate over all the members of the protobuf modules
         for member in dir(module):
             # all proto messages end with _pb2
@@ -41,8 +43,12 @@ class Protobuf(_.records.Record):
     def _message(self, name, message):
         table_options = message.DESCRIPTOR.GetOptions()
 
-        members = dict(name=name,record_cls=message)
-        types   = [Interface]
+        members = dict(
+            name       = name,
+            record_cls = message
+            )
+
+        types = [Interface]
         if not table_options.Extensions[Protobuf_pb2.no_db]:
             members.update(dict(db=self.db, table=name))
             types.append(_.records.DatabaseInterface)
@@ -76,7 +82,7 @@ class Protobuf(_.records.Record):
             members['record'] = record
 
             # check if a custom handler was defined
-            proto_handler = Protobuf._proto_handlers.get(message, None)
+            proto_handler = self._container._handler.get(name)
             types = [proto_handler] if proto_handler else []
             # add the base records handler
             types.append(_.records.HandlerInterface)
@@ -108,17 +114,14 @@ class Protobuf(_.records.Record):
 
 
 class Interface(_.records.Interface):
-    def __init__(self, _record=None):
-        self.__dict__['_record'] = _record if _record else self._record_cls()
-
     @classmethod
-    def load(cls, msg):
+    def from_json(cls, msg):
         _record = cls._record_cls()
         google.protobuf.json_format.Parse(msg, _record)
         return cls(_record)
 
     @classmethod
-    def dict(cls, _record):
+    def as_dict(cls, _record):
         return google.protobuf.json_format.MessageToDict(
             _record,
             including_default_value_fields = True,
@@ -126,12 +129,17 @@ class Interface(_.records.Interface):
             )
 
 
-# decorator for adding custom handlers for message types
-def handler(message):
-    def wrap(proto_handler):
-        Protobuf._proto_handlers[message] = proto_handler
-        return proto_handler
-    return wrap
+class ProtobufContainer(_.Container):
+    def __init__(self):
+        super().__init__()
+        self._handler = {}
+
+    # decorator for adding custom handlers for message types
+    def handler(self, _message):
+        def wrap(_handler):
+            self._handler[_message.DESCRIPTOR.name] = _handler
+            return _handler
+        return wrap
 
 
 # function to compile protobuf files for underscore apps
