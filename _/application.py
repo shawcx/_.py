@@ -112,6 +112,11 @@ class Application(tornado.web.Application):
             ( r'/(favicon.ico)', tornado.web.StaticFileHandler, {'path':''}),
             )
 
+        if _.args.debug:
+            for (pattern,cls,*params) in patterns:
+                handler = f'{cls.__module__}.{cls.__name__}'
+                logging.debug('%-32s %s %s', pattern, handler, params[0] if params else '')
+
         await self.__listen(patterns)
         await self._stop_event.wait()
         await _.wait(self.on_stop())

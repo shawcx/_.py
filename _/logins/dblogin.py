@@ -56,7 +56,7 @@ class DbLogin(_.logins.Login):
             'username' : cls._username,
             'password' : cls._password,
         }
-        subclass = type(f'{name}', (DBLoginRecords,), _.prefix(members))
+        subclass = type('DBLoginRecords', (DBLoginRecords,), _.prefix(members))
         _.application._record_handler('logins', subclass)
 
     @classmethod
