@@ -11,29 +11,49 @@ import skeleton
 # this will change the default authentication behavior
 # for all the handlers associated with the loaded components
 # must be set before _.settings.load is called
-_.auth.protected = _.auth.filter_user(lambda current_user: current_users['isadmin'])
+_.auth.protected = _.auth.filter_user(lambda current_user: current_user)
 
 class Skeleton(_.Application):
     async def initialize(self):
         self.websockets = {}
 
-        self.db = _.databases['sqlite']
-        self.data = _.records['data']
+        self.db   = _.databases.sqlite
 
-        audio = _.data['audio'](
-            device='cool',
+        audio = _.data.audio(
+            device='name',
             samples=2048,
             )
-        json = audio.dump()
-        print(json)
-        audio = _.data['audio'].load(json)
-
-        s = _.protobuf['Skeleton']()
-        s.field1 = 'matt'
-        s.field2 = 'shaw'
-        json = s.dump()
-        print(json)
-        s2 = _.protobuf['Skeleton'].load(json)
+        print()
+        print('#' * 20)
+        print('repr:', repr(audio))
+        print('dict:', audio.dict())
+        print('json:', audio.json())
+        await audio.delete()
+        await audio.insert()
+        await audio.update()
+        await audio.upsert()
+        print('find:', await _.data.audio.find_one('name'))
+        print('count:', await _.data.audio.count())
+        print('count: samples == 2048:', await audio.count('samples', 2048))
+        print('#' * 20)
+        print()
+        print('#' * 20)
+        skel = _.proto.Skeleton()
+        skel.field1 = 'skel'
+        skel.field2 = 'example'
+        print('repr:')
+        print(repr(skel))
+        print('dict:', skel.dict())
+        print('json:', skel.json())
+        await skel.delete()
+        await skel.insert()
+        await skel.update()
+        await skel.upsert()
+        print('find:')
+        print(await _.proto.Skeleton.find_one('skel'))
+        print('count:', await _.proto.Skeleton.count())
+        print('#' * 20)
+        print()
 
         self.patterns = [
             ( r'/ws',       skeleton.handlers.Socket, { 'websockets' : self.websockets } ),
