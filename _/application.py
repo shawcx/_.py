@@ -138,12 +138,12 @@ class Application(tornado.web.Application):
 
     def _record_handler(self, name, cls):
         self._records_patterns.append(
-            (f'/{name}/({cls.__name__})(?:/(.*))?', cls)
+            (f'/{name}/{cls._name}(?:/(.*))?', cls)
             )
 
     def _login_handler(self, name, cls):
         self._login_patterns.append(
-            (f'/{name}/{cls.__name__}', cls)
+            (f'/{name}/{cls._name}', cls)
             )
 
     async def initialize(self):
@@ -175,6 +175,11 @@ class Application(tornado.web.Application):
     async def on_login(self, handler, user, *args, **kwds):
         'underscore apps should override this function if a login is specified'
         raise NotImplementedError
+
+    def task(self, fn, *args, **kwds):
+        async def _task():
+            await _.wait(fn(*args, **kwds))
+        return asyncio.create_task(_task())
 
     def periodic(self, _timeout, fn, *args, **kwds):
         'run a function or coroutine on a recurring basis'
