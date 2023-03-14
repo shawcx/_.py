@@ -29,8 +29,8 @@ class Record:
     async def init(self, module, database=None):
         try:
             imported = importlib.import_module(module)
-        except ModuleNotFoundError:
-            raise _.error('Unknown module: %s', module)
+        except ModuleNotFoundError as e:
+            raise _.error('Unknown module: %s: %s', module, e)
 
         if database is None:
             if 1 == len(_.databases):
@@ -134,6 +134,9 @@ class HandlerInterface(_.handlers.Protected):
                 raise _.HTTPError(500)
         else:
             self.json = None
+
+    def load(self, kwds=None):
+        return self._record(kwds or self.json)
 
     @_.auth.protected
     async def get(self, record_id):
