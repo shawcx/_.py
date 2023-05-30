@@ -100,9 +100,10 @@ class SQLite(_.databases.Database):
         return rows
 
     async def find_one(self, table, id_column, value, order=None):
-        statement = f'SELECT * FROM {table} WHERE {id_column}={self.PH} LIMIT 1'
+        statement = f'SELECT * FROM {table} WHERE {id_column}={self.PH}'
         if order:
             statement += f' ORDER BY {order} DESC'
+        statement += ' LIMIT 1'
 
         try:
             cursor = await self.conn.cursor()

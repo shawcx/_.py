@@ -98,8 +98,10 @@ class DatabaseInterface:
         return [cls(**r) for r in rows]
 
     @classmethod
-    async def find_one(cls, value, order=None):
-        row = await cls._db.find_one(cls._name, cls._primary_key, value, order)
+    async def find_one(cls, value, col=None, order=None):
+        if col is None:
+            col = cls._primary_key
+        row = await cls._db.find_one(cls._name, col, value, order)
         return cls(**row) if row else None
 
     @classmethod
