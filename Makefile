@@ -1,5 +1,5 @@
-PROTOC = protoc
-PROTOFLAGS = -I. -I`pkg-config protobuf --variable=includedir`
+PROTOC := protoc
+PROTOFLAGS := -I. -I`pkg-config protobuf --variable=includedir`
 
 # find all proto files in the records protobuf directory
 PROTO_FILES := $(wildcard _/records/*.proto)
