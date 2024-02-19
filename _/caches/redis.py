@@ -15,7 +15,7 @@ import _
 try:
     import redis.asyncio as redis
 except ImportError:
-    raise _.error('Missing redis module')
+    raise _.error('Missing redis module with asyncio support')
 
 
 class Redis(_.caches.Cache):
