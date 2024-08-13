@@ -42,7 +42,7 @@ _.argparser.add_argument('--port', '-p',
     help='Port to listen on')
 
 
-_.config = configparser.SafeConfigParser(
+_.config = configparser.ConfigParser(
     allow_no_value = True,
     interpolation  = None,
     )
