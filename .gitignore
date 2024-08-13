@@ -5,4 +5,6 @@ __pycache__
 *.pb.h
 /build
 /dist
+/deb_dist
 /*.egg-info
+/*.tar.gz
