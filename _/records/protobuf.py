@@ -124,8 +124,8 @@ class Interface(_.records.Interface):
     def as_dict(cls, obj):
         return google.protobuf.json_format.MessageToDict(
             obj._record,
-            including_default_value_fields = True,
-            preserving_proto_field_name    = True,
+            always_print_fields_with_no_presence = True,
+            preserving_proto_field_name          = True,
             )
 
 
