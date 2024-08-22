@@ -58,26 +58,28 @@ class Data(_.records.Record):
             members.update(dict(db=self.db, table=name))
             types.append(_.records.DatabaseInterface)
 
-            table = self.schema.table(name)
+            columns = []
+
             for field in dataclasses.fields(dataclass):
-                column = table.column(field.name)
-                column.type(Data._column_mapping.get(field.type))
+                column_type = Data._column_mapping.get(field.type)
+                column_type = getattr(self.db, column_type)
+
+                column = sqlalchemy.Column(field.name, column_type)
 
                 if field.metadata.get('pkey', False):
-                    column.primary_key()
-                    members['primary_key'] = field.name
+                    column.primary_key = True
+                    #members['primary_key'] = field.name
 
                 unique = field.metadata.get('unique', False)
                 if unique is not False:
-                    table.unique(field.name, unique)
+                    column.unique = True
 
-                reference = field.metadata.get('ref', None)
-                if reference:
-                    key = field.metadata.get('key', None)
-                    column.references(reference.__name__, key)
+                #reference = field.metadata.get('ref', None)
+                #if reference:
+                #    key = field.metadata.get('key', None)
+                #    column.references(reference.__name__, key)
 
-            if hasattr(dataclass, f'_{dataclass.__name__}__no_pkey'):
-                table.primary_key(None)
+            table = sqlalchemy.Table(name.lower(), _.databases.meta, *columns)
 
         record = type(name, tuple(types), _.prefix(members))
         self._container[name] = record
@@ -145,11 +147,6 @@ class DataContainer(_.Container):
     @staticmethod
     def no_handler(cls):
         setattr(cls, f'_{cls.__name__}__no_handler', True)
-        return cls
-
-    @staticmethod
-    def no_pkey(cls):
-        setattr(cls, f'_{cls.__name__}__no_pkey', True)
         return cls
 
     @staticmethod

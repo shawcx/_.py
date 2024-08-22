@@ -39,9 +39,9 @@ class Record:
                 raise _.error('%s requires a database to be specified', name)
 
         self.db = _.databases[database]
-        self.schema = self.db.schema(module)
+
         await _.wait(self.load(imported))
-        await self.schema.apply()
+        await self.db.create_tables()
 
     def load(self, module):
         raise NotImplementedError

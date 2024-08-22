@@ -75,7 +75,7 @@ class Application(tornado.web.Application):
             await component.close()
 
     async def __async_init(self, **kwds):
-        # check if a sessions cache was specified
+        '''check if a sessions cache was specified'''
         _.sessions = _.config.get(_.name, 'sessions', fallback=None)
         if _.sessions:
             logging.debug('Sessions cache: %s', _.sessions)
@@ -122,8 +122,8 @@ class Application(tornado.web.Application):
         await _.wait(self.on_stop())
 
     async def __listen(self, patterns, **kwds):
-        # call the Tornado Application init here to give children a chance
-        # to initialize patterns and settings
+        '''call the Tornado Application init here to give children a chance
+           to initialize patterns and settings'''
         super().__init__(patterns, **self.settings)
 
         if 'xheaders' not in kwds:
@@ -147,11 +147,11 @@ class Application(tornado.web.Application):
             )
 
     async def initialize(self):
-        'underscore apps should override this function'
+        '''underscore apps should override this function'''
         raise NotImplementedError
 
     async def logging(self):
-        'underscore apps can override or extend this function'
+        '''underscore apps can override or extend this function'''
 
         # add the handlers to the logger
         if _.config.getboolean(_.name, 'logging', fallback=False):
@@ -168,12 +168,12 @@ class Application(tornado.web.Application):
             root_logger.addHandler(file_logger)
 
     async def cookie_secret(self):
-        'underscore apps can override this function'
+        '''underscore apps can override this function'''
         if _.sessions is not None:
             return await _.wait(_.sessions.cookie_secret())
 
     async def on_login(self, handler, user, *args, **kwds):
-        'underscore apps should override this function if a login is specified'
+        '''underscore apps should override this function if a login is specified'''
         raise NotImplementedError
 
     def task(self, fn, *args, **kwds):
@@ -182,7 +182,7 @@ class Application(tornado.web.Application):
         return asyncio.create_task(_task())
 
     def periodic(self, _timeout, fn, *args, **kwds):
-        'run a function or coroutine on a recurring basis'
+        '''run a function or coroutine on a recurring basis'''
         async def _periodic():
             while True:
                 # bail if the stop event is set
@@ -206,7 +206,7 @@ class Application(tornado.web.Application):
         pass
 
     def __signalHandler(self, signum, frame):
-        'handle signals in a thread-safe way'
+        '''handle signals in a thread-safe way'''
         signame = signal.Signals(signum).name
         handler = getattr(self, f'on_{signame.lower()}', None)
         if handler:

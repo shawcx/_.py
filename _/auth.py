@@ -100,6 +100,3 @@ def simple_hash(value):
     for i in range(99999):
         value = hashlib.sha512(value).digest()
     return base64.b64encode(value).decode('ascii')
-
-
-__all__ = _.all()

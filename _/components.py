@@ -51,7 +51,9 @@ async def load(component_type):
     if component_type not in _.config:
         return
 
+    # import the component submodule from _
     module = importlib.import_module(f'_.{component_type}')
+    # wrap the submodule in a Component class
     setattr(_, component_type, Component(module))
 
     # iterate over the components specified in the config
@@ -61,16 +63,18 @@ async def load(component_type):
         if component is None:
             component = name
 
-        if component.startswith('+'):
+        # allow import 3rd-party components, specified using + prefix
+        if not component.startswith('+'):
+            import_path = f'_.{component_type}.{component}'
+            attr = None
+        else:
             try:
                 component,attr = component.rsplit('.', 1)
             except ValueError:
                 attr = None
             import_path = component[1:]
-        else:
-            attr = None
-            import_path = f'_.{component_type}.{component}'
 
+        # attempt to import the module
         try:
             module = importlib.import_module(import_path)
         except ModuleNotFoundError as e:
@@ -80,17 +84,19 @@ async def load(component_type):
         if not attr:
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
+                # _ components are types
                 if not isinstance(attr, type):
                     continue
+                # _ components have _ member function
                 if not hasattr(attr, '_'):
                     continue
                 cls = attr
+                break
         else:
             cls = getattr(module, attr)
 
         if not cls:
-            logging.error('%s: %s module not found', component, component_type)
-            continue
+            raise _.error('%s: %s module not found', component, component_type)
 
         try:
             kwds = dict(_.config[name])

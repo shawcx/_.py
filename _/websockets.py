@@ -12,6 +12,8 @@ import _
 
 
 class WebSocket(tornado.websocket.WebSocketHandler):
+    '''Tweak the default WebSocket behavior for more responsive behavior'''
+
     def initialize(self, websockets):
         self.websockets = websockets
 
@@ -30,6 +32,8 @@ class WebSocket(tornado.websocket.WebSocketHandler):
 
 
 class Protected(WebSocket):
+    '''Require a valid user session to establish WebSocket connection'''
+
     async def prepare(self):
         self.session_id = self.get_secure_cookie('session_id')
         if not self.session_id:
@@ -42,6 +46,8 @@ class Protected(WebSocket):
 
 
 class EchoMixin:
+    '''Reflect incoming messages to all other connected WebSockets'''
+
     def on_message(self, msg):
         for ws in self.websockets.values():
             if ws is self:

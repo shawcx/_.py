@@ -16,6 +16,8 @@ import _
 
 from . import Protobuf_pb2
 
+import sqlalchemy
+
 
 class Protobuf(_.records.Record):
     async def init(self, module, database=None):
@@ -50,32 +52,45 @@ class Protobuf(_.records.Record):
 
         types = [Interface]
         if not table_options.Extensions[Protobuf_pb2.no_db]:
-            members.update(dict(db=self.db, table=name))
             types.append(_.records.DatabaseInterface)
+            members.update(dict(db=self.db, __table__=name.lower()))
 
-            table = self.schema.table(name)
-            if table_options.HasExtension(Protobuf_pb2.id):
-                table.default_id(table_options.Extensions[Protobuf_pb2.id])
+            columns = []
 
             # iterate over message to determine columns
             for field in message.DESCRIPTOR.fields:
-                column = table.column(field.name)
-                column.type(Protobuf._column_mapping[field.type])
+                column_type = Protobuf._column_mapping[field.type]
+                column_type = getattr(self.db, column_type)
+
+                # support repeated field types
+                if field.label is field.LABEL_REPEATED:
+                    column_type = sqlalchemy.ARRAY(column_type)
+
+                column = sqlalchemy.Column(field.name, column_type)
 
                 col_options = field.GetOptions()
+
                 # check if column should be a primary key
                 if col_options.Extensions[Protobuf_pb2.pkey]:
-                    column.primary_key()
-                    members['primary_key'] = field.name
+                    column.primary_key = True
+
                 # check for foreign key
                 if col_options.HasExtension(Protobuf_pb2.ref):
-                    table.foreign_key(col_options.Extensions[Protobuf_pb2.ref])
-                if field.label is field.LABEL_REPEATED:
-                    column.repeated()
+                    print('TODO: FKEY:', col_options.Extensions[Protobuf_pb2.ref])
+
+                columns.append(column)
+
+            if table_options.HasExtension(Protobuf_pb2.id):
+                column_name = table_options.Extensions[Protobuf_pb2.id]
+                column = sqlalchemy.Column(column_name, sqlalchemy.INTEGER, primary_key=True)
+                columns.append(column)
+
+            table = sqlalchemy.Table(name.lower(), _.databases.meta, *columns)
 
         # Protobuf does not want you to subclass the Message
         # so we dynamically create a thin wrapper
         record = type(name, tuple(types), _.prefix(members))
+
         self._container[name] = record
 
         if not table_options.Extensions[Protobuf_pb2.no_handler]:
@@ -92,24 +107,24 @@ class Protobuf(_.records.Record):
 
     _column_mapping = [
         None,
-        'DOUBLE PRECISION', # DOUBLE
-        'REAL',             # FLOAT
-        'BIGINT',           # INT64
-        'NUMERIC',          # UINT64
-        'INTEGER',          # INT32
-        'NUMERIC',          # FIXED64
-        'BIGINT',           # FIXED32
-        'BOOLEAN',          # BOOL
-        'TEXT',             # STRING
-        'JSONB',            # GROUP
-        'JSONB',            # MESSAGE
-        'BYTEA',            # BYTES
-        'BIGINT',           # UINT32
-        'INTEGER',          # ENUM
-        'INTEGER',          # SFIXED32
-        'BIGINT',           # SFIXED64
-        'INTEGER',          # SINT32
-        'BIGINT',           # SINT64
+        'DOUBLE',  # DOUBLE
+        'REAL',    # FLOAT
+        'BIGINT',  # INT64
+        'NUMERIC', # UINT64
+        'INTEGER', # INT32
+        'NUMERIC', # FIXED64
+        'BIGINT',  # FIXED32
+        'BOOLEAN', # BOOL
+        'TEXT',    # STRING
+        'JSON',    # GROUP
+        'JSON',    # MESSAGE
+        'BYTES',   # BYTES
+        'BIGINT',  # UINT32
+        'INTEGER', # ENUM
+        'INTEGER', # SFIXED32
+        'BIGINT',  # SFIXED64
+        'INTEGER', # SINT32
+        'BIGINT',  # SINT64
         ]
 
 
