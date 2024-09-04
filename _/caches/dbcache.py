@@ -83,10 +83,12 @@ class DbCache(_.caches.Cache):
         _.application._record_handler('sessions', subclass)
 
     async def cookie_secret(self):
+        # try to load exisiting cookie secret and return it
         secret = await self.db.find_one(self.config_table, self._key)
         if secret:
             secret = secret[self._val_col]
         else:
+            # otherwise generate and store the cookie secret
             secret = base64.b64encode(os.urandom(32)).decode('ascii')
             config = self.config_table()
             config(**{self._key_col : self._key, self._val_col : secret})
