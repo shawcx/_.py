@@ -8,6 +8,7 @@
 
 import json
 import logging
+import typing
 
 import sqlalchemy
 
@@ -46,19 +47,28 @@ class DbLogin(_.logins.Login):
             )
 
         # create the dblogin table
-        columns = {
-            '__tablename__' : cls._table,
-            cls._username : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
-            cls._password : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT),
+        annotations = {
+            cls._username : typing.Optional[str],
+            cls._password : typing.Optional[str],
             }
+        columns = {
+            '__tablename__'   : cls._table,
+            '__annotations__' : annotations,
+            '__primary_key__' : cls._username,
+            cls._username : sqlalchemy.orm.mapped_column(primary_key=True, init=False),
+            cls._password : sqlalchemy.orm.mapped_column(init=False),
+            }
+
         for col,dbtype in kwds.items():
             if not dbtype:
-                dbtype = 'TEXT'
-            column_type = getattr(cls._db, dbtype.upper())
-            columns[col] = sqlalchemy.orm.mapped_column(column_type)
-        type(cls._table, (_.databases.Base,), columns)
+                dbtype = 'str'
+            annotations[col] = typing.Optional[__builtins__.get(dbtype)]
+            columns[col] = sqlalchemy.orm.mapped_column(init=False)
 
+        table_cls = type(cls._table, (_.databases.Base,), columns)
         await cls._db.create_tables()
+
+        cls._table = table_cls
 
         members = {
             'name'     : name,
@@ -93,12 +103,15 @@ class DbLogin(_.logins.Login):
             if callback:
                 await _.wait(callback(name, record))
 
-            await cls._db.upsert(cls._table, record)
+            user = cls._table._from_dict(**record)
+            await cls._db.upsert(user)
             _.application.stop()
 
         if getattr(_.args, f'{prefix}list_users'):
             for user in await cls._db.find(cls._table):
-                print(user[cls._username])
+                user = user._as_dict()
+                user.pop(cls._password)
+                print(', '.join(f'{k}: {v}' for k,v in user.items()))
             _.application.stop()
 
     @classmethod
@@ -106,8 +119,11 @@ class DbLogin(_.logins.Login):
         if password:
             password = _.auth.simple_hash(username + password)
 
+        account = cls._table()
+        setattr(account, cls._username, username)
+
         try:
-            record = await cls._db.find_one(cls._table, cls._username, username)
+            record = await cls._db.find_one(cls._table, username)
         except _.error as e:
             logging.warning('%s', e)
             record = None
@@ -116,11 +132,10 @@ class DbLogin(_.logins.Login):
             logging.warning('No user: %s', username)
             return None
 
-        if password != record.get(cls._password, '!'):
+        if password != record[cls._password]:
             logging.warning('Bad password: %s', username)
             return None
 
-        record.pop(cls._password)
         return record
 
     async def post(self):

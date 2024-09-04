@@ -199,25 +199,26 @@ class Protobuf(_.records.Record):
         ]
 
 
-def _descriptor(cls, descriptor, msg, dst):
-    for field in descriptor.fields:
-        if field.type is field.TYPE_MESSAGE:
-            child_cls = getattr(cls, f'_{field.name}')
-            if field.label == field.LABEL_REPEATED:
-                dst_list = getattr(dst, field.name)
-                for item in getattr(msg, field.name):
-                    child = child_cls()
-                    _descriptor(child_cls, field.message_type, item, child)
-                    dst_list.append(child)
-            else:
-                child = child_cls()
-                _descriptor(child_cls, field.message_type, getattr(msg, field.name), child)
-                setattr(dst, field.name, child)
-        else:
-            setattr(dst, field.name, getattr(msg, field.name))
-
 
 class ProtoInterface:
+    @staticmethod
+    def __descriptor(cls, descriptor, msg, dst):
+        for field in descriptor.fields:
+            if field.type is field.TYPE_MESSAGE:
+                child_cls = getattr(cls, f'_{field.name}')
+                if field.label == field.LABEL_REPEATED:
+                    dst_list = getattr(dst, field.name)
+                    for item in getattr(msg, field.name):
+                        child = child_cls()
+                        ProtoInterface.__descriptor(child_cls, field.message_type, item, child)
+                        dst_list.append(child)
+                else:
+                    child = child_cls()
+                    ProtoInterface.__descriptor(child_cls, field.message_type, getattr(msg, field.name), child)
+                    setattr(dst, field.name, child)
+            else:
+                setattr(dst, field.name, getattr(msg, field.name))
+
     def __call__(self, *args, **kwds):
         msg = args[0] if args else kwds
         pb = self.__pb()
@@ -225,7 +226,7 @@ class ProtoInterface:
             google.protobuf.json_format.ParseDict(msg, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
-        _descriptor(self, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(self, pb.DESCRIPTOR, pb, self)
 
     @classmethod
     def _from_dict(cls, *args, **kwds):
@@ -236,7 +237,7 @@ class ProtoInterface:
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
         self = cls()
-        _descriptor(cls, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(cls, pb.DESCRIPTOR, pb, self)
         return self
 
     @classmethod
@@ -247,7 +248,7 @@ class ProtoInterface:
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
         self = cls()
-        _descriptor(cls, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(cls, pb.DESCRIPTOR, pb, self)
         return self
 
     @classmethod
@@ -255,7 +256,7 @@ class ProtoInterface:
         pb = cls.__pb()
         pb.ParseFromString(packed)
         self = cls()
-        _descriptor(cls, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(cls, pb.DESCRIPTOR, pb, self)
         return self
 
     def _as_pb(self):

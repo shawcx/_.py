@@ -118,33 +118,34 @@ class Data(_.records.Record):
 
         return table_type
 
-def _dataclass(cls, msg, dst):
-    for field in dataclasses.fields(cls):
-        child_cls = getattr(cls, f'_{field.name}', None)
-        if child_cls:
-            child = child_cls()
-            _dataclass(child_cls, msg.get(field.name), child)
-            setattr(dst, field.name, child)
-        else:
-            setattr(dst, field.name, msg.get(field.name))
-
 class DataInterface:
+    @staticmethod
+    def __dataclass(cls, msg, dst):
+        for field in dataclasses.fields(cls):
+            child_cls = getattr(cls, f'_{field.name}', None)
+            if child_cls:
+                child = child_cls()
+                DataInterface.__dataclass(child_cls, msg.get(field.name), child)
+                setattr(dst, field.name, child)
+            else:
+                setattr(dst, field.name, msg.get(field.name))
+
     def __call__(self, *args, **kwds):
         msg = args[0] if args else kwds
-        _dataclass(self, msg, self)
+        self.__dataclass(self, msg, self)
 
     @classmethod
     def _from_dict(cls, *args, **kwds):
         msg = args[0] if args else kwds
         self = cls()
-        _dataclass(cls, msg, self)
+        self.__dataclass(cls, msg, self)
         return self
 
     @classmethod
     def _from_json(cls, msg):
         msg = json.loads(msg)
         self = cls()
-        _dataclass(cls, msg, self)
+        self.__dataclass(cls, msg, self)
         return self
 
 

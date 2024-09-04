@@ -1,19 +1,29 @@
 
 import os
+import typing
+import uuid
 
 import _
 
 import skeleton
 
+@_.data.handler()
 class skel:
-    field1 : str = _.data.uniq(_.data.pkey())
-    field2 : int = _.data.uniq(100)
+    field1 : str = _.data.pkey()
+    field2 : int = 100 # _.data.uniq(100)
+    #field2 : int = _.data.uniq(100)
     field3 : int
-    lat    : float = _.data.uniq('geo')
-    lng    : float = _.data.uniq('geo')
+    lat    : float #= _.data.uniq('geo')
+    lng    : float #= _.data.uniq('geo')
 
+class exo:
+    class sub:
+        v : int = 0
+    s : sub
+    u : uuid.UUID
 
-@_.data.no_db
+@_.data.no_handler
+@_.data.no_table
 class custom:
     field1 : str
     field2 : int = 100
@@ -32,11 +42,3 @@ class custom_handler:
         else:
             record = _.data['custom'](field1=record_id,field3=200)
             self.write(record.json())
-
-
-@_.data.no_handler
-@_.data.no_db
-class ignored:
-    __no_handler = True
-    __no_db      = True
-    test : int = 100

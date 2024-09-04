@@ -37,10 +37,10 @@ class Memory(_.caches.Cache):
         session = self.mem.get(session_id, None)
         if not session:
             return None
-        if await _.wait(_.application.is_session_expired(session, self.expires)):
+        session = json.loads(session)
+        if await _.wait(_.application.is_session_expired(session, self._expires)):
             return None
-        return json.loads(session)
-
+        return session
 
 
 class MemorySessions(_.handlers.Protected):

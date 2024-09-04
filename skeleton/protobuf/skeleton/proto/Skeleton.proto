@@ -14,8 +14,12 @@ message Reports {
     option (_.records.handler) = true;
 
     message Report {
+        message Deep {
+            string deep = 1;
+        }
         string source = 1;
         int32  count  = 2;
+        Deep   deep   = 3;
     }
 
              Report single   = 1;
@@ -24,7 +28,7 @@ message Reports {
 }
 
 message Numbers {
-    option (_.records.notable) = true;
+    option (_.records.no_table) = true;
     repeated int32 reports = 1;
 }
 

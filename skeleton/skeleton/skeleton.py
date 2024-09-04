@@ -13,51 +13,159 @@ import skeleton
 # must be set before _.settings.load is called
 _.auth.protected = _.auth.filter_user(lambda current_user: current_user)
 
+import sqlalchemy
+
 class Skeleton(_.Application):
     async def initialize(self):
         self.websockets = {}
 
-        self.db   = _.databases.sqlite
+        self.db = _.databases.sqlite
 
-        skel = _.data.skel(
+        s = _.data.skel()
+        s(
             field1='name',
             field2=100,
             field3=200,
             lat=1.2,
             lng=3.4,
             )
+        try:
+            await self.db.insert(s)
+        except Exception as e:
+            s = await self.db.find_one(_.data.skel)
+            await self.db.delete(s)
 
-        print()
-        print('#' * 20)
-        print('repr:', repr(skel))
-        print('dict:', skel.dict())
-        print('json:', skel.json())
-        await skel.delete()
-        await skel.insert()
-        await skel.update()
-        await skel.upsert()
-        print('find:', await _.data.skel.find_one('name'))
-        print('count:', await _.data.skel.count())
-        print('count: samples == 200:', await skel.count('field3', 200))
-        print('#' * 20)
-        print()
-        print('#' * 20)
+        #print(skel._as_json())
+        #print(skel._as_dict())
+        #print()
+        #print('#' * 20)
+        #print('repr:', repr(skel))
+        #print('dict:', skel.dict())
+        #print('json:', skel.json())
+        #await skel.delete()
+        #await skel.insert()
+        #await skel.update()
+        #await skel.upsert()
+        #print('find:', await _.data.skel.find_one('name'))
+        #print('count:', await _.data.skel.count())
+        #print('count: samples == 200:', await skel.count('field3', 200))
+        #print('#' * 20)
+        #print()
+        #print('#' * 20)
+
         skel = _.proto.Skeleton()
-        skel.field1 = 'skel'
-        skel.field2 = 'example'
-        print('repr:')
-        print(repr(skel))
-        print('dict:', skel.dict())
-        print('json:', skel.json())
-        await skel.delete()
-        await skel.insert()
-        await skel.update()
-        await skel.upsert()
-        print('find:')
-        print(await _.proto.Skeleton.find_one('skel'))
-        print('count:', await _.proto.Skeleton.count())
-        print('#' * 20)
+        skel(dict(field1='50',field2='60'))
+        #print(skel._as_json())
+        #await self.db.insert(skel)
+        for r in await self.db.find(_.proto.Skeleton):
+            print('@', r.Skeleton_id, r._as_json())
+            #r2 = await self.db.find_one(_.proto.Skeleton, r.Skeleton_id)
+            #print(r2._as_json())
+
+        skel2 = _.proto.Skeleton()
+        skel2(field1='500',field2='600')
+        print(skel2._as_json())
+        print(skel2._as_pb())
+        skel2.field1 = 'skel'
+        skel2.field2 = 'example'
+        print(skel2._as_dict())
+        print(skel2)
         print()
+
+        r = _.proto.Reports()
+        r.single = _.proto.Reports._single()
+        r.single.source = 'matt'
+        r.single.count = 10
+        r.single.deep = _.proto.Reports._single._deep()
+        r.single.deep.deep = 'DEEP'
+        for x in range(4):
+            m = _.proto.Reports._multiple()
+            m.source=f'{x * x}'
+            m.count = 11
+            m.deep = _.proto.Reports._multiple._deep()
+            m.deep.deep = 'D' * x
+            m.count=x
+            r.multiple.append(m)
+        r.req = '88'
+
+        #await self.db.insert(r)
+        await self.db.upsert(r)
+        for report in await self.db.find(_.proto.Reports):
+            print('@@@@', report.Reports_id, report._as_json())
+            await self.db.delete(report)
+        #one = await self.db.find_one(_.proto.Reports, 3)
+        #one.single.count=999
+        #await self.db.update(one)
+
+        #print(r._as_json())
+        p = r._as_pb()
+        r2 = _.proto.Reports._from_pb(p)
+        #r2 = _.proto.Reports._from_json(r._as_json())
+        print(r2)
+        print()
+        print(r2._as_pb())
+        print()
+        #print(r2._as_dict())
+        print()
+        #print(r2._as_json())
+        print()
+        print('_.data:', _.data)
+        e = _.data.exo()
+        e.u = uuid.uuid4()
+        e.s = _.data.exo._s()
+        e.s.v = 8
+        print(e)
+        #print(e._as_dict())
+        #print(_.data.exo._from_json(e._as_json()))
+        #print(_.data.exo._from_dict(e._as_dict()))
+        print()
+        for r in await self.db.find(_.data.exo):
+            print(r._as_json())
+        print(await self.db.find(_.data.exo))
+        print()
+
+#        await skel.insert()
+#        s = skel.select().where(skel._orm.field1.in_(['skel']))
+#        print(s)
+#        print()
+#        await skel.find('field1', 'skel')
+#        #_.proto.Skeleton()
+#        #print(_.proto.keys())
+#        stmt =  sqlalchemy.select(_.proto.orm_Skeleton)
+#        print(stmt.__class__)
+#        print()
+
+        #stmt = select(User).where(User.first.in_(['Matt']))
+        #for user in session.scalars(stmt):
+        #    print(user)
+
+
+    #    skel = _.proto.Skeleton.from_json('{"field1":"skel","field2":"json"}')
+        #skel = _.proto.Skeleton()
+    #    print('repr:', repr(skel))
+    #    print('dict:', skel.dict())
+    #    print('json:', skel.json())
+        #await skel.insert()
+        #await skel.update()
+        #await skel.upsert()
+        #print('find:')
+        #print(await _.proto.Skeleton.find_one('skel'))
+        #print('count:', await _.proto.Skeleton.count())
+        #print('#' * 20)
+        #print()
+        #print(dir(skel))
+        #print(skel._table)
+        #print()
+
+#        from sqlalchemy.future import select
+#        async with self.db.session() as session:
+#            print(session)
+#            res = await session.execute(select(skel))
+#            print(res)
+#            print()
+#            for r in res:
+#                print(r)
+#            print()
 
         self.patterns = [
             ( r'/ws',       skeleton.handlers.Socket, { 'websockets' : self.websockets } ),
@@ -78,8 +186,6 @@ class Skeleton(_.Application):
 
     async def on_dblogin_update(self, handler, name, record):
         'allow apps to make adjustments to the record before calling sql statement'
-        print(name)
-        print(record)
 
     async def on_gitlab_login(self, handler, user):
         session = {
@@ -92,12 +198,12 @@ class Skeleton(_.Application):
         return session
 
     async def on_login(self, handler, user):
-        user['last'] = int(time.time() * 1000)
-        await self.db.update('users', 'username', user)
+        user.last = int(time.time() * 1000)
+        await self.db.upsert(user)
 
         session = {
             'session_id' : str(uuid.uuid4()),
-            'username'   : user['username'],
+            'username'   : user.username,
             'agent'      : handler.request.headers.get('User-Agent', ''),
             'ip'         : handler.request.remote_ip,
             'time'       : _.now(),
@@ -105,6 +211,6 @@ class Skeleton(_.Application):
         return session
 
     async def is_session_expired(self, session, expires):
-        created = session['time'] / 1000
+        created = session.time / 1000
         elapsed = (time.time() - created) / 3600
         return elapsed > expires

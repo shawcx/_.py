@@ -104,24 +104,30 @@ class Base(
     'base class for _.records'
 
     def __call__(self, **kwds):
-        raise NotImplementedError
+        for k,v in kwds.items():
+            setattr(self, k, v)
 
     @classmethod
     def _from_dict(cls, **kwds):
-        raise NotImplementedError
+        self = cls()
+        for k,v in kwds.items():
+            setattr(self, k, v)
+        return self
 
     @classmethod
     def _from_json(cls, msg):
-        raise NotImplementedError
+        return cls._from_dict(**json.loads(msg))
 
     def _as_dict(self):
         return dataclasses.asdict(self)
 
     def _as_json(self, **kwds):
-        return json.dumps(self, cls=Json, separators=(',',':'), **kwds)
+        return json.dumps(self, cls=_Json, separators=(',',':'), **kwds)
 
+    def __getitem__(self, name):
+        return getattr(self, name)
 
-class Json(json.JSONEncoder):
+class _Json(json.JSONEncoder):
     def default(self, obj):
         if hasattr(obj, '_as_dict'):
             return obj._as_dict()

@@ -37,10 +37,7 @@ class Cache:
         raise NotImplementedError
 
     def save_session(self, session):
-        try:
-            return session['session_id']
-        except KeyError:
-            raise _.error('No session_id defined in session')
+        raise NotImplementedError
 
     async def load_session(self, session_id):
         raise NotImplementedError

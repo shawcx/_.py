@@ -10,6 +10,7 @@ import base64
 import json
 import logging
 import os
+import typing
 
 import sqlalchemy
 
@@ -22,8 +23,8 @@ class DbCache(_.caches.Cache):
     _key     = 'cookie'
     _val_col = 'value'
 
-    _table      = 'sessions'
-    _session_id = 'session_id'
+    _table       = 'sessions'
+    _session_col = 'session_id'
 
     async def init(self, name, database=None, table=None, **kwds):
         if not hasattr(_.application, 'is_session_expired'):
@@ -36,24 +37,36 @@ class DbCache(_.caches.Cache):
                 raise _.error('dbcache requires a database to be specified')
         self.db = _.databases[database]
 
-        type(self._config, (_.databases.Base,), {
-            '__tablename__' : self._config,
-            self._key_col : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
-            self._val_col : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
+        self.config_table = type(self._config, (_.databases.Base,), {
+            '__tablename__'   : self._config,
+            '__annotations__' : {
+                self._key_col : typing.Optional[str],
+                self._val_col : typing.Optional[str],
+                },
+            '__primary_key__' : self._key_col,
+            self._key_col : sqlalchemy.orm.mapped_column(primary_key=True, init=False),
+            self._val_col : sqlalchemy.orm.mapped_column(init=False),
             })
 
+        annotations = {
+            self._session_col : typing.Optional[str],
+            self._val_col     : typing.Optional[str],
+            }
         # create the session table
         columns = {
-            '__tablename__' : self._table,
-            self._session_id : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
-            self._val_col    : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT),
+            '__tablename__'   : self._table,
+            '__annotations__' : annotations,
+            '__primary_key__' : self._session_col,
+            self._session_col : sqlalchemy.orm.mapped_column(primary_key=True, init=False),
+            self._val_col    : sqlalchemy.orm.mapped_column(init=False),
             }
         for col,dbtype in kwds.items():
             if not dbtype:
-                dbtype = 'TEXT'
-            column_type = getattr(self.db, dbtype.upper())
-            columns[col] = sqlalchemy.orm.mapped_column(column_type)
-        type(self._table, (_.databases.Base,), columns)
+                dbtype = 'str'
+            annotations[col] = typing.Optional[__builtins__.get(dbtype)]
+            columns[col] = sqlalchemy.orm.mapped_column(init=False)
+
+        self.session_table = type(self._table, (_.databases.Base,), columns)
 
         await self.db.create_tables()
 
@@ -64,30 +77,28 @@ class DbCache(_.caches.Cache):
             name       = name,
             db         = self.db,
             table      = self._table,
-            session_id = self._session_id,
+            session_id = self._session_col,
             )
         subclass = type(name, (DbCacheSessions,), _.prefix(members))
         _.application._record_handler('sessions', subclass)
 
     async def cookie_secret(self):
-        secret = await self.db.find_one(self._config, self._key_col, self._key)
+        secret = await self.db.find_one(self.config_table, self._key)
         if secret:
-            secret = secret['value']
+            secret = secret[self._val_col]
         else:
             secret = base64.b64encode(os.urandom(32))
-            record = {
-                self._key_col : self._key,
-                self._val_col : secret,
-            }
-            await self.db.upsert(self._config, record)
+            config = self.config_table()
+            config(**{self._key_col : self._key, self._val_col : secret})
+            await self.db.upsert(config)
         return secret
 
     async def save_session(self, session):
-        super().save_session(session)
-        await self.db.upsert(self._table, session)
+        session = self.session_table._from_dict(**session)
+        await self.db.upsert(session)
 
     async def load_session(self, session_id):
-        record = await self.db.find_one(self._table, self._session_id, session_id)
+        record = await self.db.find_one(self.session_table, session_id)
         if not record:
             return None
         if await _.wait(_.application.is_session_expired(record, self._expires)):
@@ -95,17 +106,17 @@ class DbCache(_.caches.Cache):
         return record
 
     async def clear_stale_sessions(self):
-        for record in await self.db.find(self._table):
+        for record in await self.db.find(self.session_table):
             if await _.wait(_.application.is_session_expired(record, self._expires)):
-                logging.debug('Removing expired session: %s', record[self._session_id])
-                await self.db.delete(self._table, self._session_id, record[self._session_id])
+                logging.debug('Removing expired session: %s', record[self._session_col])
+                await self.db.delete(record)
 
 
 class DbCacheSessions(_.handlers.Protected):
     @_.auth.protected
     async def get(self, session_id=None):
         if session_id:
-            record = await self._db.find_one(self._table, self._session_id, session_id)
+            record = await self._db.find_one(self._table, self._session_col, session_id)
             self.write(record)
         else:
             records = await self._db.find(self._table)
@@ -118,7 +129,7 @@ class DbCacheSessions(_.handlers.Protected):
     async def delete(self, session_id=None):
         self.set_status(204)
         if session_id:
-            await self._db.delete(self._table, self._session_id, session_id)
+            await self._db.delete(self._table, self._session_col, session_id)
 
             callback = getattr(_.application, f'on_{self._name}_delete', None)
             if callback is None:
