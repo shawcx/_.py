@@ -19,7 +19,7 @@ class Skeleton(_.Application):
     async def initialize(self):
         self.websockets = {}
 
-        self.db = _.databases.sqlite
+        self.db = _.databases.store
 
         s = _.data.skel()
         s(
