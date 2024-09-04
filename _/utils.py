@@ -34,7 +34,15 @@ async def wait(result):
     try:
         return result if not asyncio.iscoroutine(result) else await result
     except Exception as e:
-        logging.exception("Unhandled exception")
+        if _.args.debug:
+            trace = []
+            for f in inspect.stack()[:0:-1]:
+                if not f.code_context:
+                    continue
+                context = '\n'.join(c.strip() for c in f.code_context)
+                msg = f'  File "{f.filename}", line {f.lineno}, in {f.function}\n    {context}'
+                trace.append(msg)
+            logging.exception(f'Unhandled exception:\n%s', '\n'.join(trace))
         raise
 
 
