@@ -7,8 +7,6 @@
 #
 
 import logging
-import os
-import sqlite3
 import uuid
 
 import _
@@ -30,11 +28,35 @@ import sqlalchemy.dialects.sqlite
 #aiosqlite.register_converter('UUID', lambda v: uuid.UUID(v))
 
 
+class UUID(sqlalchemy.types.TypeDecorator):
+    impl = sqlalchemy.types.CHAR
+
+    def load_dialect_impl(self, dialect):
+        return dialect.type_descriptor(CHAR(32))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if not isinstance(value, uuid.UUID):
+            return "%.32x" % uuid.UUID(value).int
+        return "%.32x" % value.int
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if not isinstance(value, uuid.UUID):
+            value = uuid.UUID(value)
+        return value
+
+
 class SQLite(_.databases.Database):
     DRIVER = 'sqlite+aiosqlite'
 
+    ARRAY  = sqlalchemy.dialects.sqlite.JSON
     JSON   = sqlalchemy.dialects.sqlite.JSON
     BYTES  = sqlalchemy.dialects.sqlite.BLOB
+    BOOL   = sqlalchemy.dialects.sqlite.BOOLEAN
+    UUID   = UUID
 
     async def init(self, name, **kwds):
         await super(SQLite, self).init(name, **kwds)

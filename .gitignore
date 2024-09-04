@@ -3,6 +3,7 @@ __pycache__
 *_pb2.py
 *.pb.cc
 *.pb.h
+.DS_Store
 /build
 /dist
 /deb_dist

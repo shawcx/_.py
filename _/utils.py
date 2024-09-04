@@ -31,7 +31,6 @@ function = type(lambda: None)
 
 async def wait(result):
     '''wait on coroutines or return result of non-coroutines'''
-
     try:
         return result if not asyncio.iscoroutine(result) else await result
     except Exception as e:

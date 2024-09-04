@@ -36,9 +36,7 @@ class custom_handler:
 
 @_.data.no_handler
 @_.data.no_db
-@_.data.no_pkey
 class ignored:
     __no_handler = True
     __no_db      = True
-    __no_pkey    = True
     test : int = 100

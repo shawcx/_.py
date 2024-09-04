@@ -5,8 +5,27 @@ package skeleton.proto;
 import "_/records/Protobuf.proto";
 
 message Skeleton {
-    string field1  = 1 [(_.records.pkey) = true];
+    option (_.records.handler) = true;
+    string field1  = 1;
     string field2  = 2;
+}
+
+message Reports {
+    option (_.records.handler) = true;
+
+    message Report {
+        string source = 1;
+        int32  count  = 2;
+    }
+
+             Report single   = 1;
+    repeated Report multiple = 2;
+             string req   = 3 [(_.records.required) = true];
+}
+
+message Numbers {
+    option (_.records.notable) = true;
+    repeated int32 reports = 1;
 }
 
 message Message {
@@ -16,19 +35,12 @@ message Message {
 }
 
 message NoTable {
-    option (_.records.no_db) = true;
+    option (_.records.handler) = true;
     string field1  = 1;
     string field2  = 2;
 }
 
 message NoWeb {
-    option (_.records.no_handler) = true;
-    string field1  = 1;
+    string field1  = 1 [(_.records.pkey) = true];
     string field2  = 2;
-}
-
-message DefaultId {
-    string field1 = 1 [(_.records.uniq) = true];
-    int32  field2 = 2 [(_.records.uniq) = true];
-    repeated int32  field3 = 3;
 }

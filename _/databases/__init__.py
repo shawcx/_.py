@@ -6,21 +6,22 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
-import collections
+import base64
+import dataclasses
+import datetime
+import json
 import logging
 import os
+import uuid
 
 import _
 
 try:
     import sqlalchemy
     import sqlalchemy.orm
+    from sqlalchemy.ext.asyncio import AsyncSession,create_async_engine
 except ImportError:
     raise _.error('Missing sqlalchemy module')
-
-from sqlalchemy.ext.asyncio import create_async_engine
-
-meta = sqlalchemy.MetaData()
 
 
 class Database:
@@ -46,32 +47,88 @@ class Database:
         url = sqlalchemy.engine.URL.create(**kwds)
         logging.debug('Database URL: %s: %s', name, url)
         self.engine = create_async_engine(url, echo=False)
+        self.session = sqlalchemy.orm.sessionmaker(self.engine, class_=AsyncSession)
 
     async def create_tables(self):
         async with self.engine.begin() as conn:
-            await conn.run_sync(meta.create_all)
+            await conn.run_sync(Base.metadata.create_all)
             await conn.commit()
 
     async def close(self):
         await self.engine.dispose()
 
-    async def find(self, table, params=None, order=None):
+    # CREATE
+    async def insert(self, *args):
+        try:
+            async with self.session() as session:
+                async with session.begin():
+                    session.add_all(args)
+        except sqlalchemy.exc.IntegrityError as e:
+            raise _.error('%s', e) from None
+
+    # READ
+    async def find(self, cls, where=None):
+        statement = sqlalchemy.select(cls)
+        async with self.session() as session:
+            results = await session.execute(statement)
+            return results.unique().scalars().all()
+
+    async def find_one(self, cls, value=None, column=None):
+        statement = sqlalchemy.select(cls)
+        if value:
+            if not column:
+                column = getattr(cls, cls.__primary_key__)
+            statement = statement.where(column == value)
+        async with self.session() as session:
+            results = await session.execute(statement)
+            return results.unique().scalars().first()
+
+    # UPDATE
+    async def upsert(self, obj):
+        async with self.session() as session:
+            async with session.begin():
+                await session.merge(obj)
+
+    # DELETE
+    async def delete(self, obj):
+        async with self.session() as session:
+            async with session.begin():
+                await session.delete(obj)
+
+
+class Base(
+        sqlalchemy.ext.asyncio.AsyncAttrs,
+        sqlalchemy.orm.MappedAsDataclass,
+        sqlalchemy.orm.DeclarativeBase,
+        ):
+    'base class for _.records'
+
+    def __call__(self, **kwds):
         raise NotImplementedError
 
-    async def find_one(self, table, id_column, _id, order=None):
+    @classmethod
+    def _from_dict(cls, **kwds):
         raise NotImplementedError
 
-    async def insert(self, table, id_column, values):
+    @classmethod
+    def _from_json(cls, msg):
         raise NotImplementedError
 
-    async def insert_unique(self, table, id_column, values):
-        raise NotImplementedError
+    def _as_dict(self):
+        return dataclasses.asdict(self)
 
-    async def upsert(self, table, id_column, values):
-        raise NotImplementedError
+    def _as_json(self, **kwds):
+        return json.dumps(self, cls=Json, separators=(',',':'), **kwds)
 
-    async def update(self, table, id_column, values):
-        raise NotImplementedError
 
-    async def delete(self, table, id_column, value):
-        raise NotImplementedError
+class Json(json.JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, '_as_dict'):
+            return obj._as_dict()
+        if isinstance(obj, bytes):
+            return base64.b64encode(obj).decode('ascii')
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        if isinstance(obj, datetime.datetime):
+            return str(obj)
+        return json.JSONEncoder.default(self, obj)

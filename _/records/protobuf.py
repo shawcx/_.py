@@ -6,17 +6,19 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import dataclasses
 import logging
 import os
+import sys
+import typing
 
+import sqlalchemy
 import google.protobuf.message
 import google.protobuf.json_format
 
 import _
 
 from . import Protobuf_pb2
-
-import sqlalchemy
 
 
 class Protobuf(_.records.Record):
@@ -31,6 +33,7 @@ class Protobuf(_.records.Record):
 
     def load(self, module):
         # iterate over all the members of the protobuf modules
+        self.package = module.__package__ + '.'
         for member in dir(module):
             # all proto messages end with _pb2
             if not member.endswith('_pb2'):
@@ -40,108 +43,228 @@ class Protobuf(_.records.Record):
             # iterate over all the message definitions
             for name,descriptor in pb2.DESCRIPTOR.message_types_by_name.items():
                 message = getattr(pb2, name)
-                self._message(name, message)
 
-    def _message(self, name, message):
-        table_options = message.DESCRIPTOR.GetOptions()
+                table_options = message.DESCRIPTOR.GetOptions()
+                if self.db and not table_options.Extensions[Protobuf_pb2.no_table]:
+                    table_type = self._proto_table(name, message=message)
+                    self._container[name] = table_type
 
-        members = dict(
-            name       = name,
-            record_cls = message
-            )
+                if table_options.Extensions[Protobuf_pb2.handler]:
+                    members = {
+                        'name' : name,
+                    }
+                    #members['record'] = record
+                    ## check if a custom handler was defined
+                    proto_handler = self._container._handler.get(name)
+                    types = [proto_handler] if proto_handler else []
+                    # add the base records handler
+                    types.append(_.records.HandlerInterface)
 
-        types = [Interface]
-        if not table_options.Extensions[Protobuf_pb2.no_db]:
-            types.append(_.records.DatabaseInterface)
-            members.update(dict(db=self.db, __table__=name.lower()))
+                    #record_handler = type(name, tuple(types), _.prefix(members))
+                    #_.application._record_handler(self.name, record_handler)
 
-            columns = []
+    def _proto_table(self, name, message=None, descriptor=None, parent=None, parent_key=None, parent_col=None):
+        child_tables = {}
+        annotations  = {}
 
-            # iterate over message to determine columns
-            for field in message.DESCRIPTOR.fields:
-                column_type = Protobuf._column_mapping[field.type]
-                column_type = getattr(self.db, column_type)
+        members = {
+            '__tablename__'   : name,
+            '__annotations__' : annotations,
+            }
 
+        if message:
+            members['_ProtoInterface__pb'] = message
+
+        if descriptor is None:
+            descriptor = message.DESCRIPTOR
+
+        primary_key = None
+        # iterate over message to determine columns
+        for field in descriptor.fields:
+            col_options = field.GetOptions()
+
+            # check if column should be primary key
+            is_primary_key = col_options.Extensions[Protobuf_pb2.pkey]
+            if is_primary_key:
+                if primary_key:
+                    raise _.error('Only one primary key can be specified')
+                primary_key = field.name
+
+            column_type = Protobuf._proto_field_mapping[field.type]
+            if column_type is dict:
+                if is_primary_key:
+                    raise _.error('Message type cannot be primary key')
+
+                ref_table_name = f'{name}_{field.name}'
+                column_type = ref_table_name
+                if field.label is field.LABEL_REPEATED:
+                    column_type = typing.List[column_type]
+                else:
+                    column_type = typing.Optional[column_type]
+                column_type = sqlalchemy.orm.Mapped[column_type]
+
+                annotations[field.name] = column_type
+
+                members[field.name] = sqlalchemy.orm.relationship(
+                    back_populates=name,
+                    lazy='joined',
+                    cascade="all, delete-orphan",
+                    init=False,
+                    )
+
+                child_tables[ref_table_name] = field
+            else:
                 # support repeated field types
                 if field.label is field.LABEL_REPEATED:
-                    column_type = sqlalchemy.ARRAY(column_type)
+                    column_type = typing.List[column_type]
+                column_type = sqlalchemy.orm.Mapped[column_type]
 
-                column = sqlalchemy.Column(field.name, column_type)
-
-                col_options = field.GetOptions()
-
-                # check if column should be a primary key
-                if col_options.Extensions[Protobuf_pb2.pkey]:
-                    column.primary_key = True
+                # check if column should be unique
+                unique = col_options.Extensions[Protobuf_pb2.uniq]
 
                 # check for foreign key
                 if col_options.HasExtension(Protobuf_pb2.ref):
                     print('TODO: FKEY:', col_options.Extensions[Protobuf_pb2.ref])
 
-                columns.append(column)
+                annotations[field.name] = column_type
 
-            if table_options.HasExtension(Protobuf_pb2.id):
-                column_name = table_options.Extensions[Protobuf_pb2.id]
-                column = sqlalchemy.Column(column_name, sqlalchemy.INTEGER, primary_key=True)
-                columns.append(column)
+                members[field.name] = sqlalchemy.orm.mapped_column(
+                    primary_key=is_primary_key,
+                    unique=unique,
+                    init=False,
+                    )
 
-            table = sqlalchemy.Table(name.lower(), _.databases.meta, *columns)
+        table_options = descriptor.GetOptions()
 
-        # Protobuf does not want you to subclass the Message
-        # so we dynamically create a thin wrapper
-        record = type(name, tuple(types), _.prefix(members))
+        if table_options.HasExtension(Protobuf_pb2.id):
+            primary_key = table_options.Extensions[Protobuf_pb2.id]
+            members[primary_key] = sqlalchemy.orm.mapped_column(
+                sqlalchemy.INTEGER,
+                primary_key=True,
+                autoincrement=True,
+                init=False,
+                )
+        elif primary_key is None:
+            primary_key = f'{name}_id'
+            members[primary_key] = sqlalchemy.orm.mapped_column(
+                sqlalchemy.INTEGER,
+                primary_key=True,
+                autoincrement=True,
+                init=False,
+                )
 
-        self._container[name] = record
+        if parent and parent_key and parent_col:
+            members[f'{parent}_{parent_key}'] = sqlalchemy.orm.mapped_column(
+                sqlalchemy.ForeignKey(f'{parent}.{parent_key}'),
+                init=False,
+                )
+            members[f'{parent}'] = sqlalchemy.orm.relationship(
+                parent,
+                back_populates=parent_col,
+                lazy='joined',
+                init=False,
+                )
 
-        if not table_options.Extensions[Protobuf_pb2.no_handler]:
-            members['record'] = record
+        members['__primary_key__'] = primary_key
 
-            # check if a custom handler was defined
-            proto_handler = self._container._handler.get(name)
-            types = [proto_handler] if proto_handler else []
-            # add the base records handler
-            types.append(_.records.HandlerInterface)
+        table_type = type(name, (ProtoInterface,_.databases.Base,), members)
 
-            record_handler = type(name, tuple(types), _.prefix(members))
-            _.application._record_handler(self.name, record_handler)
+        for child_table,field in child_tables.items():
+            child_type = self._proto_table(child_table, descriptor=field.message_type, parent=name, parent_key=primary_key, parent_col=field.name)
+            setattr(table_type, f'_{field.name}', child_type)
 
-    _column_mapping = [
+        return table_type
+
+    # TODO: try mapping to sqlalchemy.types
+    _proto_field_mapping = [
         None,
-        'DOUBLE',  # DOUBLE
-        'REAL',    # FLOAT
-        'BIGINT',  # INT64
-        'NUMERIC', # UINT64
-        'INTEGER', # INT32
-        'NUMERIC', # FIXED64
-        'BIGINT',  # FIXED32
-        'BOOLEAN', # BOOL
-        'TEXT',    # STRING
-        'JSON',    # GROUP
-        'JSON',    # MESSAGE
-        'BYTES',   # BYTES
-        'BIGINT',  # UINT32
-        'INTEGER', # ENUM
-        'INTEGER', # SFIXED32
-        'BIGINT',  # SFIXED64
-        'INTEGER', # SINT32
-        'BIGINT',  # SINT64
+        float,     # DOUBLE
+        float,     # FLOAT
+        int,       # INT64
+        int,       # UINT64
+        int,       # INT32
+        int,       # FIXED64
+        int,       # FIXED32
+        bool,      # BOOL
+        str,       # STRING
+        dict,      # GROUP - deprecated
+        dict,      # MESSAGE
+        bytes,     # BYTES
+        int,       # UINT32
+        int,       # ENUM
+        int,       # SFIXED32
+        int,       # SFIXED64
+        int,       # SINT32
+        int,       # SINT64
         ]
 
 
-class Interface(_.records.Interface):
-    @classmethod
-    def from_json(cls, msg):
-        _record = cls._record_cls()
-        google.protobuf.json_format.Parse(msg, _record)
-        return cls(_record)
+def _descriptor(cls, descriptor, msg, dst):
+    for field in descriptor.fields:
+        if field.type is field.TYPE_MESSAGE:
+            child_cls = getattr(cls, f'_{field.name}')
+            if field.label == field.LABEL_REPEATED:
+                dst_list = getattr(dst, field.name)
+                for item in getattr(msg, field.name):
+                    child = child_cls()
+                    _descriptor(child_cls, field.message_type, item, child)
+                    dst_list.append(child)
+            else:
+                child = child_cls()
+                _descriptor(child_cls, field.message_type, getattr(msg, field.name), child)
+                setattr(dst, field.name, child)
+        else:
+            setattr(dst, field.name, getattr(msg, field.name))
+
+
+class ProtoInterface:
+    def __call__(self, *args, **kwds):
+        msg = args[0] if args else kwds
+        pb = self.__pb()
+        try:
+            google.protobuf.json_format.ParseDict(msg, pb)
+        except google.protobuf.json_format.ParseError as e:
+            raise _.error('%s', e) from None
+        _descriptor(self, pb.DESCRIPTOR, pb, self)
 
     @classmethod
-    def as_dict(cls, obj):
-        return google.protobuf.json_format.MessageToDict(
-            obj._record,
-            always_print_fields_with_no_presence = True,
-            preserving_proto_field_name          = True,
-            )
+    def _from_dict(cls, *args, **kwds):
+        msg = args[0] if args else kwds
+        pb = cls.__pb()
+        try:
+            google.protobuf.json_format.ParseDict(msg, pb)
+        except google.protobuf.json_format.ParseError as e:
+            raise _.error('%s', e) from None
+        self = cls()
+        _descriptor(cls, pb.DESCRIPTOR, pb, self)
+        return self
+
+    @classmethod
+    def _from_json(cls, msg):
+        pb = cls.__pb()
+        try:
+            google.protobuf.json_format.Parse(msg, pb)
+        except google.protobuf.json_format.ParseError as e:
+            raise _.error('%s', e) from None
+        self = cls()
+        _descriptor(cls, pb.DESCRIPTOR, pb, self)
+        return self
+
+    @classmethod
+    def _from_pb(cls, packed):
+        pb = cls.__pb()
+        pb.ParseFromString(packed)
+        self = cls()
+        _descriptor(cls, pb.DESCRIPTOR, pb, self)
+        return self
+
+    def _as_pb(self):
+        pb = self.__pb()
+        try:
+            google.protobuf.json_format.ParseDict(self._as_dict(), pb)
+        except google.protobuf.json_format.ParseError as e:
+            raise _.error('%s', e) from None
+        return pb.SerializeToString()
 
 
 class ProtobufContainer(_.Container):

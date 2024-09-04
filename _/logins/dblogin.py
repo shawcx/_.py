@@ -9,6 +9,8 @@
 import json
 import logging
 
+import sqlalchemy
+
 import _
 
 
@@ -19,6 +21,7 @@ class DbLogin(_.logins.Login):
 
     @classmethod
     async def init(cls, name, database=None, table=None, username=None, password=None, **kwds):
+        cls._database = database
         if database is None:
             if 1 == len(_.databases):
                 cls._database = list(_.databases.keys())[0]
@@ -42,13 +45,20 @@ class DbLogin(_.logins.Login):
             help='list users'
             )
 
-        schema = cls._db.schema(name)
-        table = schema.table(cls._table)
-        table.column(cls._username).primary_key()
-        table.column(cls._password)
+        # create the dblogin table
+        columns = {
+            '__tablename__' : cls._table,
+            cls._username : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
+            cls._password : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT),
+            }
         for col,dbtype in kwds.items():
-            table.column(col).type(dbtype)
-        await schema.apply()
+            if not dbtype:
+                dbtype = 'TEXT'
+            column_type = getattr(cls._db, dbtype.upper())
+            columns[col] = sqlalchemy.orm.mapped_column(column_type)
+        type(cls._table, (_.databases.Base,), columns)
+
+        await cls._db.create_tables()
 
         members = {
             'name'     : name,

@@ -11,6 +11,8 @@ import json
 import logging
 import os
 
+import sqlalchemy
+
 import _
 
 
@@ -34,18 +36,26 @@ class DbCache(_.caches.Cache):
                 raise _.error('dbcache requires a database to be specified')
         self.db = _.databases[database]
 
-        schema = self.db.schema('config')
-        table = schema.table(self._config)
-        table.column(self._key_col).primary_key()
-        table.column(self._val_col)
-        await schema.apply()
+        type(self._config, (_.databases.Base,), {
+            '__tablename__' : self._config,
+            self._key_col : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
+            self._val_col : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
+            })
 
-        schema = self.db.schema('sessions')
-        table = schema.table(self._table)
-        table.column(self._session_id).primary_key()
+        # create the session table
+        columns = {
+            '__tablename__' : self._table,
+            self._session_id : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT, primary_key=True),
+            self._val_col    : sqlalchemy.orm.mapped_column(sqlalchemy.TEXT),
+            }
         for col,dbtype in kwds.items():
-            table.column(col).type(dbtype)
-        await schema.apply()
+            if not dbtype:
+                dbtype = 'TEXT'
+            column_type = getattr(self.db, dbtype.upper())
+            columns[col] = sqlalchemy.orm.mapped_column(column_type)
+        type(self._table, (_.databases.Base,), columns)
+
+        await self.db.create_tables()
 
         # interval comes from the [sessions] section of the ini
         _.application.periodic(self._interval, self.clear_stale_sessions)

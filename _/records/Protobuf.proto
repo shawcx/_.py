@@ -6,14 +6,14 @@ package _.records;
 
 extend google.protobuf.MessageOptions {
     string id         = 50001;
-    bool   no_db      = 50002;
-    bool   no_pkey    = 50003;
-    bool   no_handler = 50004;
+    bool   no_table   = 50002;
+    bool   handler    = 50003;
 }
 
 extend google.protobuf.FieldOptions {
     bool   pkey       = 50001;
     bool   uniq       = 50002;
-    string ref        = 50003;
-    string paired     = 50004;
+    bool   required   = 50003;
+    string ref        = 50004;
+    string paired     = 50005;
 }

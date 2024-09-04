@@ -6,11 +6,11 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
-import base64
 import importlib
-import datetime
 import json
-import uuid
+
+import sqlalchemy
+import sqlalchemy.ext.asyncio
 
 import _
 
@@ -32,98 +32,87 @@ class Record:
         except ModuleNotFoundError as e:
             raise _.error('Unknown module: %s: %s', module, e)
 
-        if database is None:
-            if 1 == len(_.databases):
-                database = list(_.databases.keys())[0]
-            else:
-                raise _.error('%s requires a database to be specified', name)
-
-        self.db = _.databases[database]
+        self.db = _.databases[database] if database else None
 
         await _.wait(self.load(imported))
-        await self.db.create_tables()
+
+        if self.db:
+            await self.db.create_tables()
 
     def load(self, module):
         raise NotImplementedError
-
-    class Json(json.JSONEncoder):
-        def default(self, obj):
-            if isinstance(obj, bytes):
-                return base64.b64encode(obj).decode('ascii')
-            if hasattr(obj, '_record_cls'):
-                return obj.as_dict(obj)
-            if isinstance(obj, datetime.datetime):
-                return str(obj)
-            if isinstance(obj, uuid.UUID):
-                return str(obj)
-            return json.JSONEncoder.default(self, obj)
-
-
-class Interface:
-    def __init__(self, *args, **kwds):
-        self.__dict__['_record'] = self._record_cls(*args, **kwds)
-        for kwd in kwds:
-            setattr(self._record, kwd, kwds[kwd])
-    @classmethod
-    def from_json(cls, msg):
-        raise NotImplementedError
-
-    @classmethod
-    def as_dict(cls, obj):
-        raise NotImplementedError
-
-    def json(self, **kwds):
-        return json.dumps(self, cls=Record.Json, separators=(',',':'), **kwds)
-
-    def dict(self):
-        return self.as_dict(self)
-
-    def __getattr__(self, name):
-        return getattr(self._record, name)
-
-    def __setattr__(self, name, value):
-        self._record.__setattr__(name, value)
-
-    def __str__(self):
-        return self._record.__str__()
-
-    def __repr__(self):
-        return self._record.__repr__()
 
 
 class DatabaseInterface:
     @classmethod
     async def find(cls, params=None, order=None):
-        rows = await cls._db.find(cls._name, params, order)
-        return [cls(**r) for r in rows]
+        print('FIND!!!!', cls, params, order)
+        print(dir(cls._orm))
+        print()
+        #rows = await cls._db.find(cls._name, params, order)
+        #return [cls(**r) for r in rows]
+        stmt = sqlalchemy.select(cls._orm)
+        async with cls._db.session() as session:
+            async with session.begin() as connection:
+                print(dir(session))
+                r = await session.scalar(stmt)
+                print(r)
+                print()
 
     @classmethod
     async def find_one(cls, value, col=None, order=None):
-        if col is None:
-            col = cls._primary_key
-        row = await cls._db.find_one(cls._name, col, value, order)
-        return cls(**row) if row else None
+        print('hi', cls, value)
+        #if col is None:
+        #    col = cls._primary_key
+        #row = await cls._db.find_one(cls._name, col, value, order)
+        #return cls(**row) if row else None
+        pass
 
     @classmethod
     async def count(cls, field=None, value=None):
-        return await cls._db.count(cls._name, field, value)
+        #return await cls._db.count(cls._name, field, value)
+        pass
+
+    def select(self):
+        return sqlalchemy.select(self._orm)
 
     async def insert(self):
-        values = self.dict()
-        row = await self._db.insert(self._name, self._primary_key, values)
-        return row
+        #values = self.dict()
+        #obj = self._table(**self.dict())
+        #await self._db.insert(obj)
+
+        stmt = sqlalchemy.select(self._orm)
+        async with self._db.session() as session:
+            print('%' * 50)
+            print(self)
+            print('%' * 50)
+            #async with session.begin() as connection:
+            #    print(dir(session))
+            #    r = await session.scalar(stmt)
+            #    print(r)
+            #    print()
+        #print()
+        #print(dir(self))
+        #print(self._db)
+        #for c in self._table.c:
+        #    print(c)
+        #print(values)
+        #print()
+        #row = await self._db.insert(self._name, self._primary_key, values)
+        #return row
 
     async def update(self):
         values = self.dict()
-        row = await self._db.update(self._name, self._primary_key, values)
-        return row
+        #row = await self._db.update(self._name, self._primary_key, values)
+        #return row
 
     async def upsert(self):
         values = self.dict()
-        row = await self._db.upsert(self._name, values)
+        #row = await self._db.upsert(self._name, values)
 
     async def delete(self):
-        await self._db.delete(self._name, self._primary_key, getattr(self, self._primary_key))
+        obj = self._table(**self.dict())
+        await self._db.delete(obj)
 
 
 class HandlerInterface(_.handlers.Protected):
