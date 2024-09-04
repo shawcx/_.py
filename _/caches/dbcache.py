@@ -87,7 +87,7 @@ class DbCache(_.caches.Cache):
         if secret:
             secret = secret[self._val_col]
         else:
-            secret = base64.b64encode(os.urandom(32))
+            secret = base64.b64encode(os.urandom(32)).decode('ascii')
             config = self.config_table()
             config(**{self._key_col : self._key, self._val_col : secret})
             await self.db.upsert(config)
