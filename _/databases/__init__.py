@@ -131,6 +131,10 @@ class Base(
     def __getitem__(self, name):
         return getattr(self, name)
 
+    def __setitem__(self, name, value):
+        setattr(self, name, value)
+
+
 class _Json(json.JSONEncoder):
     def default(self, obj):
         if hasattr(obj, '_as_dict'):
