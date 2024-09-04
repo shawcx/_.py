@@ -48,9 +48,19 @@ async def wait(result):
 
 
 class Paths:
-    def __init__(self, root=None, ns=None):
+    def __init__(self, root, ns=None):
         self.root = root
         self.ns   = ns
 
     def __call__(self, *args):
-        return os.path.join(self.root, self.ns, *args)
+        if self.ns is None:
+            return os.path.join(self.root, *args)
+        else:
+            return os.path.join(self.root, self.ns, *args)
+
+    # support / as a path joiner
+    def __truediv__(self, other):
+        return Paths(self(other))
+
+    def __str__(self):
+        return self()

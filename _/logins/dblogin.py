@@ -157,14 +157,15 @@ class DBLoginRecords(_.handlers.Protected):
     @_.auth.protected
     async def get(self, name, username=None):
         if username:
-            record = await self._db.find_one(self._table, self._username, username)
+            record = await self._db.find_one(self._table, username)
+            record = record._as_dict()
             record.pop(self._password, None)
             self.write(record)
         else:
             records = await self._db.find(self._table)
             data = []
             for record in records:
-                record = dict(record)
+                record = record._as_dict()
                 record.pop(self._password, None)
                 data.append(record)
             self.write({'data':data})
@@ -188,6 +189,7 @@ class DBLoginRecords(_.handlers.Protected):
             if key not in prune:
                 user.pop(key)
 
+    # TODO: this needs to be updated
         record = dict((k,None) for k in entry)
         record.pop('database', None)
         record.pop('table',    None)
@@ -203,14 +205,18 @@ class DBLoginRecords(_.handlers.Protected):
             password = _.auth.simple_hash(username + password)
             record[self._password] = password
 
-        await self._db.insert(self._table, self._username, record)
+        await self._db.insert(record)
         self.set_status(204)
 
     # DELETE
     @_.auth.protected
     async def delete(self, username=None):
         self.set_status(204)
-        await self._db.delete(self._table, self._username, username)
+        if username is None:
+            return
+
+        user = await self._db.find_one(self._table, username)
+        await self._db.delete(user)
 
         callback = getattr(_.application, f'on_{self._name}_delete', None)
         if callback is None:

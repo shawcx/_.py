@@ -24,7 +24,6 @@ class Systemd(_.supports.Support):
             )
 
         self.params.update(kwds)
-
         _.argparser.add_argument(f'--systemd',
             action='store_true',
             help='install systemd service'
@@ -34,7 +33,8 @@ class Systemd(_.supports.Support):
         if not _.args.systemd:
             return
 
-        logging.info('Installing systemd service')
+        # set name to the value from params
+        name = self.params.get('name')
 
         with open(os.path.join(self.root, 'systemd', 'systemd.service'), 'r') as fp:
             conf = fp.read()
@@ -49,6 +49,8 @@ class Systemd(_.supports.Support):
             with open(path, 'w') as fp:
                 fp.write(conf)
         except Exception as e:
-            raise _.error('Could not write systemd service: %s', e)
+            raise _.error('Could not write systemd service: %s: %s', name, e) from None
+
+        logging.info('Installed systemd service: %s', name)
 
         _.application.stop()

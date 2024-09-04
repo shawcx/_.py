@@ -35,7 +35,7 @@ class Htpasswd(_.logins.Login):
         password = b'{SHA}' + base64.b64encode(hashlib.sha1(password).digest())
         password = password.decode('ascii')
 
-        path = _.paths('etc', _.config.get('simple', 'path'))
+        path = _.paths(_.config.get('simple', 'path'))
 
         fp = open(path, 'r')
         for line in fp:

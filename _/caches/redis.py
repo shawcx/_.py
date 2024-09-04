@@ -27,7 +27,10 @@ class Redis(_.caches.Cache):
             kwds['socket_timeout'] = 3
 
         self.redis = redis.Redis(**kwds)
-        await self.redis.ping()
+        try:
+            await self.redis.ping()
+        except Exception as e:
+            raise _.error('Redis: %s: %s', name, e)
 
         members = dict(
             name  = name,
