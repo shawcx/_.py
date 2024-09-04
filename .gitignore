@@ -1,6 +1,5 @@
 __pycache__
 *.pyc
-*_pb2.py
 *.pb.cc
 *.pb.h
 .DS_Store
