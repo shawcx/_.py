@@ -24,14 +24,18 @@ class Systemd(_.supports.Support):
             )
 
         self.params.update(kwds)
+
         _.argparser.add_argument(f'--systemd',
-            action='store_true',
+            metavar='<user>', default=0, nargs='?',
             help='install systemd service'
             )
 
     async def args(self, name):
-        if not _.args.systemd:
+        if _.args.systemd == 0:
             return
+
+        if _.args.systemd:
+            self.params['user'] = _.args.systemd
 
         # set name to the value from params
         name = self.params.get('name')
