@@ -103,6 +103,10 @@ class Base(
         ):
     'base class for _.records'
 
+    type_annotation_map = {
+        int: sqlalchemy.BIGINT,
+    }
+
     def __call__(self, **kwds):
         for k,v in kwds.items():
             setattr(self, k, v)
