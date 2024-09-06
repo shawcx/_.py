@@ -19,7 +19,7 @@ except ImportError:
 
 
 class Redis(_.caches.Cache):
-    async def init(self, name, **kwds):
+    async def init(self, component_name, **kwds):
         if 'socket_connect_timeout' not in kwds:
             kwds['socket_connect_timeout'] = 3
 
@@ -30,13 +30,13 @@ class Redis(_.caches.Cache):
         try:
             await self.redis.ping()
         except Exception as e:
-            raise _.error('Redis: %s: %s', name, e)
+            raise _.error('Redis: %s: %s', component_name, e)
 
         members = dict(
-            name  = name,
-            redis = self.redis,
+            component = component_name,
+            redis     = self.redis,
             )
-        subclass = type(name, (RedisSessions,), _.prefix(members))
+        subclass = type(component_name, (RedisSessions,), _.prefix(members))
         _.application._record_handler('sessions', subclass)
 
     async def close(self):
@@ -94,8 +94,8 @@ class RedisSessions(_.handlers.Protected):
         self.set_status(204)
         if session_id:
             await self._redis.delete(f'session/{session_id}')
-            callback = getattr(_.application, f'on_{self._name}_delete', None)
+            callback = getattr(_.application, f'on_{self._component}_delete', None)
             if callback is None:
                 callback = getattr(_.application, 'on_redis_delete', None)
             if callback:
-                await _.wait(callback(self._name, session_id))
+                await _.wait(callback(self._component, session_id))

@@ -21,11 +21,11 @@ import _
 
 class Htpasswd(_.logins.Login):
     @classmethod
-    async def init(cls, name, **kwds):
+    async def init(cls, component_name, **kwds):
         pass
 
     @classmethod
-    async def args(cls, name):
+    async def args(cls, component_name):
         pass
 
     async def post(self):

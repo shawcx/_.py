@@ -138,12 +138,12 @@ class Application(tornado.web.Application):
 
     def _record_handler(self, name, cls):
         self._records_patterns.append(
-            (f'/{name}/{cls._name}(?:/(.*))?', cls)
+            (f'/{name}/{cls._component}(?:/(.*))?', cls)
             )
 
     def _login_handler(self, name, cls):
         self._login_patterns.append(
-            (f'/{name}/{cls._name}', cls)
+            (f'/{name}/{cls._component}', cls)
             )
 
     async def initialize(self):

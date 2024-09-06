@@ -13,8 +13,8 @@ from .oauth2 import OAuth2
 
 class Google(OAuth2, _.logins.Login):
     @classmethod
-    async def init(cls, name, **kwds):
+    async def init(cls, component_name, **kwds):
         cls.scope = ['email']
         cls.extra = {'approval_prompt': 'auto'}
 
-        await super().init(name, **kwds)
+        await super().init(component_name, **kwds)

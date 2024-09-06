@@ -17,14 +17,15 @@ import _
 
 class Record:
     @classmethod
-    async def _(cls, name, **kwds):
+    async def _(cls, component_name, **kwds):
         self = cls()
-        self.name = name
+        self.component_name = component_name
         try:
+            print('????', kwds)
             await self.init(**kwds)
         except TypeError as e:
             raise _.error('%s', e)
-        _.records[name] = self
+        _.records[component_name] = self
 
     async def init(self, module, database=None):
         try:

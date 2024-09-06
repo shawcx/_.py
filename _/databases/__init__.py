@@ -37,15 +37,15 @@ class Database:
     UUID    = None
 
     @classmethod
-    async def _(cls, name, **kwds):
+    async def _(cls, component_name, **kwds):
         self = cls()
-        _.databases[name] = self
-        await self.init(name, **kwds)
+        _.databases[component_name] = self
+        await self.init(component_name, **kwds)
 
-    async def init(self, name, **kwds):
+    async def init(self, component_name, **kwds):
         kwds['drivername'] = self.DRIVER
         url = sqlalchemy.engine.URL.create(**kwds)
-        logging.debug('Database URL: %s: %s', name, url)
+        logging.debug('Database URL: %s: %s', component_name, url)
         self.engine = create_async_engine(url, echo=False)
         self.session = sqlalchemy.orm.sessionmaker(self.engine, class_=AsyncSession)
 
@@ -128,11 +128,11 @@ class Base(
     def _as_json(self, **kwds):
         return json.dumps(self, cls=_Json, separators=(',',':'), **kwds)
 
-    def __getitem__(self, name):
-        return getattr(self, name)
+    def __getitem__(self, key):
+        return getattr(self, key)
 
-    def __setitem__(self, name, value):
-        setattr(self, name, value)
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
 
 
 class _Json(json.JSONEncoder):

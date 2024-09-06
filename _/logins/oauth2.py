@@ -17,7 +17,7 @@ class OAuth2(tornado.auth.GoogleOAuth2Mixin):
     extra = None
 
     @classmethod
-    async def init(cls, name, client_id, client_secret, **kwds):
+    async def init(cls, component_name, client_id, client_secret, **kwds):
         _.application.settings[cls._OAUTH_SETTINGS_KEY] = {
             'key'    : client_id,
             'secret' : client_secret,

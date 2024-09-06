@@ -22,14 +22,14 @@ except ImportError:
 
 class Slap(_.logins.Login):
     @classmethod
-    async def init(cls, name, **kwds):
-        _.argparser.add_argument(f'--{name}-list-users',
+    async def init(cls, component_name, **kwds):
+        _.argparser.add_argument(f'--{component_name}-list-users',
             action='store_true',
             help='list users'
             )
 
     @classmethod
-    async def args(cls, name):
+    async def args(cls, component_name):
         pass
 
     @classmethod

@@ -8,25 +8,25 @@ import _
 
 class Login(tornado.web.RequestHandler):
     @classmethod
-    async def _(cls, name, **kwds):
+    async def _(cls, component_name, **kwds):
         # create a dynamic child class with kwds from the ini file
         # add a reference to the component name accessible by the new type
         members = _.prefix(kwds)
-        members['_name'] = name
-        login_cls = type(name, (cls,), members)
+        members['_component'] = component_name
+        login_cls = type(component_name, (cls,), members)
         try:
-            await login_cls.init(name, **kwds)
+            await login_cls.init(component_name, **kwds)
         except TypeError as e:
             raise _.error('%s', e)
-        _.logins[name] = login_cls
+        _.logins[component_name] = login_cls
         _.application._login_handler('login', login_cls)
 
     @classmethod
-    async def init(cls, name):
+    async def init(cls, component_name):
         pass
 
     @classmethod
-    async def args(cls, name):
+    async def args(cls, component_name):
         pass
 
     @classmethod
@@ -35,10 +35,10 @@ class Login(tornado.web.RequestHandler):
 
     def initialize(self):
         self.next_url = self.get_argument('next', '/')
-        self.redirect_uri = f'{self.request.protocol}://{self.request.host}/login/{self._name}?next={self.next_url}'
+        self.redirect_uri = f'{self.request.protocol}://{self.request.host}/login/{self._component}?next={self.next_url}'
 
     async def on_login_success(self, record):
-        fn = getattr(self.application, f'on_{self._name}_login', self.application.on_login)
+        fn = getattr(self.application, f'on_{self._component}_login', self.application.on_login)
         try:
             session = await _.wait(fn(self, record))
             await _.wait(_.sessions.save_session(session))

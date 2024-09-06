@@ -24,10 +24,10 @@ from . import Protobuf_pb2
 class Protobuf(_.records.Record):
     async def init(self, module, database=None):
         # setup the container beforehand so the data module can use data decorators
-        if hasattr(_, self.name):
-            raise _.error('Record name "%s" for "%s" conflicts in _ root', self.name, module.__name__)
+        if hasattr(_, self.component_name):
+            raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
         self._container = ProtobufContainer()
-        setattr(_, self.name, self._container)
+        setattr(_, self.component_name, self._container)
 
         await super().init(module, database)
 
@@ -61,7 +61,7 @@ class Protobuf(_.records.Record):
                     types.append(_.records.HandlerInterface)
 
                     #record_handler = type(name, tuple(types), _.prefix(members))
-                    #_.application._record_handler(self.name, record_handler)
+                    #_.application._record_handler(self.component_name, record_handler)
 
     def _proto_table(self, name, message=None, descriptor=None, parent=None, parent_key=None, parent_col=None):
         child_tables = {}

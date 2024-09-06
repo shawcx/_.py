@@ -58,6 +58,6 @@ class SQLite(_.databases.Database):
     BOOL   = sqlalchemy.dialects.sqlite.BOOLEAN
     UUID   = UUID
 
-    async def init(self, name, **kwds):
-        await super(SQLite, self).init(name, **kwds)
+    async def init(self, component_name, **kwds):
+        await super(SQLite, self).init(component_name, **kwds)
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)

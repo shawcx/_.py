@@ -11,7 +11,7 @@ import _
 
 class Cache:
     @classmethod
-    async def _(cls, name, **kwds):
+    async def _(cls, component_name, **kwds):
         # create a dynamic child class with kwds from the ini file
         try:
             members = dict(_.config['sessions'])
@@ -24,8 +24,8 @@ class Cache:
 
         # instantiate the derived class
         self = type(cls.__name__, (cls,), _.prefix(members))()
-        _.caches[name] = self
-        await self.init(name, **kwds)
+        _.caches[component_name] = self
+        await self.init(component_name, **kwds)
 
     async def init(self, **kwds):
         pass

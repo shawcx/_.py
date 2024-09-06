@@ -13,17 +13,17 @@ import _
 
 
 class Memory(_.caches.Cache):
-    async def init(self, name, **kwds):
+    async def init(self, component_name, **kwds):
         if not hasattr(_.application, 'is_session_expired'):
             raise _.error('Application does not have is_session_expired function defined')
 
         self.sessions = {}
 
         members = dict(
-            name     = name,
-            sessions = self.sessions,
+            component = component_name,
+            sessions  = self.sessions,
             )
-        subclass = type(name, (MemorySessions,), _.prefix(members))
+        subclass = type(component_name, (MemorySessions,), _.prefix(members))
         _.application._record_handler('sessions', subclass)
 
     def cookie_secret(self):
@@ -67,8 +67,8 @@ class MemorySessions(_.handlers.Protected):
         self.set_status(204)
         if session_id:
             del self._sessions[session_id]
-            callback = getattr(_.application, f'on_{self._name}_delete', None)
+            callback = getattr(_.application, f'on_{self._component}_delete', None)
             if callback is None:
                 callback = getattr(_.application, 'on_memory_delete', None)
             if callback:
-                await _.wait(callback(self._name, session_id))
+                await _.wait(callback(self._component, session_id))

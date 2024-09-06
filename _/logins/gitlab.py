@@ -38,12 +38,12 @@ from .oauth2 import OAuth2
 
 class GitLab(OAuth2, _.logins.Login):
     @classmethod
-    async def init(cls, name, gitlab, **kwds):
+    async def init(cls, component_name, gitlab, **kwds):
         cls.scope = ['read_user']
 
         cls._OAUTH_AUTHORIZE_URL    = f'{gitlab}/oauth/authorize'
         cls._OAUTH_ACCESS_TOKEN_URL = f'{gitlab}/oauth/token'
         cls._OAUTH_USERINFO_URL     = f'{gitlab}/api/v4/user'
-        cls._OAUTH_SETTINGS_KEY     = f'{name}_oauth'
+        cls._OAUTH_SETTINGS_KEY     = f'{component_name}_oauth'
 
-        await super().init(name, **kwds)
+        await super().init(component_name, **kwds)

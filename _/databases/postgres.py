@@ -28,5 +28,5 @@ class Postgres(_.databases.Database):
     BYTES  = sqlalchemy.dialects.postgresql.BYTEA
     UUID   = sqlalchemy.dialects.postgresql.UUID
 
-    async def init(self, name, **kwds):
-        await super(Postgres, self).init(name, **kwds)
+    async def init(self, component_name, **kwds):
+        await super(Postgres, self).init(component_name, **kwds)
