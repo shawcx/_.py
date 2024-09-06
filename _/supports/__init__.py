@@ -13,17 +13,17 @@ import _
 
 class Support:
     @classmethod
-    async def _(cls, name, **kwds):
+    async def _(cls, component_name, **kwds):
         self = cls()
-        _.supports[name] = self
+        _.supports[component_name] = self
         self.root = os.path.dirname(__file__)
         self.root = os.path.abspath(self.root)
-        await self.init(name, **kwds)
+        await self.init(component_name, **kwds)
 
     @classmethod
-    async def init(cls, name):
+    async def init(cls, component_name):
         pass
 
     @classmethod
-    async def args(cls, name):
+    async def args(cls, component_name):
         pass

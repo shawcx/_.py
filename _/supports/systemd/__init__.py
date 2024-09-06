@@ -14,7 +14,7 @@ import _
 
 
 class Systemd(_.supports.Support):
-    async def init(self, name, **kwds):
+    async def init(self, component_name, **kwds):
         self.params = dict(
             ns        = _.ns,
             name      = _.name,
@@ -30,7 +30,7 @@ class Systemd(_.supports.Support):
             help='install systemd service'
             )
 
-    async def args(self, name):
+    async def args(self, component_name):
         if _.args.systemd == 0:
             return
 

@@ -57,11 +57,11 @@ async def load(component_type):
     setattr(_, component_type, Component(module))
 
     # iterate over the components specified in the config
-    for name in _.config[component_type]:
+    for component_name in _.config[component_type]:
         # check if the component is aliased
-        component = _.config[component_type][name]
+        component = _.config[component_type][component_name]
         if component is None:
-            component = name
+            component = component_name
 
         # allow import 3rd-party components, specified using + prefix
         if not component.startswith('+'):
@@ -99,8 +99,8 @@ async def load(component_type):
             raise _.error('%s: %s module not found', component, component_type)
 
         try:
-            kwds = dict(_.config[name])
+            kwds = dict(_.config[component_name])
         except KeyError:
             kwds = {}
 
-        await cls._(name, **kwds)
+        await cls._(component_name, **kwds)
