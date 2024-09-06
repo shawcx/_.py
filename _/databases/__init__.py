@@ -39,6 +39,7 @@ class Database:
     @classmethod
     async def _(cls, component_name, **kwds):
         self = cls()
+        self.component_name = component_name
         _.databases[component_name] = self
         await self.init(component_name, **kwds)
 
@@ -50,9 +51,12 @@ class Database:
         self.session = sqlalchemy.orm.sessionmaker(self.engine, class_=AsyncSession)
 
     async def create_tables(self):
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            await conn.commit()
+        try:
+            async with self.engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+                await conn.commit()
+        except Exception as e:
+            raise _.error('Database "%s": %s', self.component_name, e) from None
 
     async def close(self):
         await self.engine.dispose()
