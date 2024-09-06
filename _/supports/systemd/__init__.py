@@ -19,7 +19,7 @@ class Systemd(_.supports.Support):
             ns        = _.ns,
             name      = _.name,
             cmdline   = f'{os.path.abspath(sys.argv[0])}',
-            user      = 'nobody',
+            user      = os.environ.get('USER', 'nobody'),
             conf_path = '/etc/systemd/system/{name}.service',
             )
 
