@@ -114,8 +114,11 @@ class Protobuf(_.records.Record):
 
                 child_tables[ref_table_name] = field
             else:
+                explicit_type = None
                 # support repeated field types
                 if field.label is field.LABEL_REPEATED:
+                    if column_type is str:
+                        explicit_type = sqlalchemy.ARRAY(sqlalchemy.TEXT)
                     column_type = typing.List[column_type]
                 column_type = sqlalchemy.orm.Mapped[column_type]
 
@@ -129,6 +132,7 @@ class Protobuf(_.records.Record):
                 annotations[field.name] = column_type
 
                 members[field.name] = sqlalchemy.orm.mapped_column(
+                    explicit_type,
                     primary_key=is_primary_key,
                     unique=unique,
                     init=False,
