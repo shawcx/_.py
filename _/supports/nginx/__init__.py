@@ -52,7 +52,6 @@ class Nginx(_.supports.Support):
             self.params['server_name'] = name
 
         conf = _.paths(f'{name}.conf')
-        print('CONF:', conf)
         if not os.path.exists(conf):
             conf = os.path.join(self.root, 'nginx', 'nginx.conf')
         logging.debug('Loading configuration: %s', conf)

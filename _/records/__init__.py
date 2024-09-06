@@ -21,7 +21,6 @@ class Record:
         self = cls()
         self.component_name = component_name
         try:
-            print('????', kwds)
             await self.init(**kwds)
         except TypeError as e:
             raise _.error('%s', e)
