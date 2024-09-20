@@ -77,11 +77,10 @@ class Database:
             results = await session.execute(statement)
             return results.unique().scalars().all()
 
-    async def find_one(self, cls, value=None, column=None):
+    async def find_one(self, cls, value, column=None):
         statement = sqlalchemy.select(cls)
         if value:
-            if not column:
-                column = getattr(cls, cls.__primary_key__)
+            column = getattr(cls, column or cls.__primary_key__)
             statement = statement.where(column == value)
         async with self.session() as session:
             results = await session.execute(statement)
@@ -94,11 +93,18 @@ class Database:
                 await session.merge(obj)
 
     # DELETE
-    async def delete(self, obj):
+    async def delete(self, obj, value=None):
         async with self.session() as session:
             async with session.begin():
-                await session.delete(obj)
-
+                if value is None:
+                    # delete an ORM instance
+                    await session.delete(obj)
+                else:
+                    # otherwise assume obj is the SQLalchemy table class
+                    column = getattr(obj, obj.__primary_key__)
+                    statement = sqlalchemy.delete(obj).where(column == value)
+                    results = await session.execute(statement)
+                    return results.rowcount
 
 class Base(
         sqlalchemy.ext.asyncio.AsyncAttrs,

@@ -136,14 +136,14 @@ class Application(tornado.web.Application):
 
         logging.info('Listening on %s:%d', _.args.address, _.args.port)
 
-    def _record_handler(self, name, cls):
+    def _record_handler(self, component, cls):
         self._records_patterns.append(
-            (f'/{name}/{cls._component}(?:/(.*))?', cls)
+            (f'/{component}/{cls._component}(?:/(.*))?', cls)
             )
 
-    def _login_handler(self, name, cls):
+    def _login_handler(self, component, cls):
         self._login_patterns.append(
-            (f'/{name}/{cls._component}', cls)
+            (f'/{component}/{cls._component}', cls)
             )
 
     async def initialize(self):

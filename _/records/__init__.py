@@ -59,56 +59,42 @@ class HandlerInterface(_.handlers.Protected):
 
     @_.auth.protected
     async def get(self, record_id):
-        if not hasattr(self, '_db'):
-            raise _.HTTPError(405)
-
-        if not record_id:
-            records = await self._record.find()
-            self.write(dict(data=[r.dict() for r in records]))
+        if record_id is None:
+            records = await self._db.find(self._record)
+            self.write(dict(data=[r._as_dict() for r in records]))
         else:
-            record = await self._record.find_one(record_id)
+            record = await self._db.find_one(self._record, record_id)
             if record is None:
                 raise _.HTTPError(404)
-            self.write(record)
+            self.write(record._as_dict())
 
     @_.auth.protected
     async def post(self, record_id, record=None):
-        if not hasattr(self, '_db'):
-            raise _.HTTPError(405)
         if record is None:
-            record = self._record(**self.json)
+            record = self._record._from_json(self.json)
         try:
-            await record.insert()
+            await self._db.insert(record)
         except _.error as e:
             raise _.HTTPError(409, e) from None
         self.set_status(204)
-        return record
+        #self.write(record._as_dict())
 
     @_.auth.protected
     async def put(self, record_id, record=None):
-        if not hasattr(self, '_db'):
-            raise _.HTTPError(405)
         if record is None:
-            record = self._record(**self.json)
+            record = self._record._from_json(self.json)
         try:
-            await record.upsert()
+            await self._db.upsert(record)
         except _.error as e:
             raise _.HTTPError(500, e) from None
         self.set_status(204)
-        return record
+        #self.write(record._as_dict())
 
     @_.auth.protected
     async def delete(self, record_id):
-        if not hasattr(self, '_db'):
-            raise _.HTTPError(405)
-
-        if not record_id:
+        if record_id is None:
             raise _.HTTPError(500)
-
-        record = await self._record.find_one(record_id)
-        if not record:
+        count = await self._db.delete(self._record, record_id)
+        if not count:
             raise _.HTTPError(404)
-
-        await record.delete()
         self.set_status(204)
-        return record

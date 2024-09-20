@@ -32,13 +32,9 @@ class Protobuf(_.records.Record):
         await super().init(module, database)
 
     def load(self, module):
-        # iterate over all the members of the protobuf modules
-        self.package = module.__package__ + '.'
-
         try:
             self._options = getattr(module, f'{self._options}_pb2')
             no_table = getattr(self._options, 'no_table')
-            print(no_table)
         except AttributeError:
             raise _.error('Cannot find protobuf module "%s"', f'{self._options}_pb2')
 
@@ -52,25 +48,30 @@ class Protobuf(_.records.Record):
             # iterate over all the message definitions
             for name,descriptor in pb2.DESCRIPTOR.message_types_by_name.items():
                 message = getattr(pb2, name)
-
                 options = message.DESCRIPTOR.GetOptions()
+
                 if self.db and not options.Extensions[self._options.no_table]:
                     table_type = self._proto_table(name, message=message)
                     self._container[name] = table_type
 
-                if options.Extensions[self._options.handler]:
-                    members = {
-                        'name' : name,
-                    }
-                    #members['record'] = record
-                    ## check if a custom handler was defined
-                    proto_handler = self._container._handler.get(name)
-                    types = [proto_handler] if proto_handler else []
-                    # add the base records handler
-                    types.append(_.records.HandlerInterface)
+                    if options.Extensions[self._options.handler]:
+                        self._proto_handler(name, table_type)
 
-                    #record_handler = type(name, tuple(types), _.prefix(members))
-                    #_.application._record_handler(self.component_name, record_handler)
+    def _proto_handler(self, name, table_type):
+        members = {
+            'component' : name,
+            'db'        : self.db,
+            'record'    : table_type,
+        }
+        ## check if a custom handler was defined
+        proto_handler = self._container._handler.get(name)
+        print(proto_handler)
+        types = [proto_handler] if proto_handler else []
+        # add the base records handler
+        types.append(_.records.HandlerInterface)
+
+        record_handler = type(name, tuple(types), _.prefix(members))
+        _.application._record_handler(self.component_name, record_handler)
 
     def _proto_table(self, name, message=None, descriptor=None, parent=None, parent_key=None, parent_col=None):
         child_tables = {}
@@ -292,10 +293,3 @@ class ProtobufContainer(_.Container):
             self._handler[_message.DESCRIPTOR.name] = _handler
             return _handler
         return wrap
-
-
-# function to compile protobuf files for underscore apps
-if '__main__' == __name__:
-    root = os.path.dirname(_.__file__)
-    root = os.path.abspath(os.path.join(root, '..'))
-    print(root)
