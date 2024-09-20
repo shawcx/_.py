@@ -32,7 +32,7 @@ class Skeleton(_.Application):
         try:
             await self.db.insert(s)
         except Exception as e:
-            s = await self.db.find_one(_.data.skel)
+            s = await self.db.find_one(_.data.skel, None)
             await self.db.delete(s)
 
         #print(skel._as_json())
@@ -93,6 +93,27 @@ class Skeleton(_.Application):
         for report in await self.db.find(_.proto.Reports):
             print('@@@@', report.Reports_id, report._as_json())
             await self.db.delete(report)
+
+        print()
+
+        await self.db.upsert(r)
+        for report in await self.db.find(_.proto.Reports):
+            print('###', report.Reports_id, report._as_json())
+
+        z = _.proto.Reports()
+        R = _.proto.Reports
+        print()
+        print('#' * 80)
+        print(report.Reports_id)
+        print(await self.db.delete(R, 1))
+        print(await self.db.delete(R, 2))
+        print('#' * 80)
+        print()
+        #r.Report_id = 1
+
+        for report in await self.db.find(_.proto.Reports):
+            print('###', report.Reports_id, report._as_json())
+
         #one = await self.db.find_one(_.proto.Reports, 3)
         #one.single.count=999
         #await self.db.update(one)

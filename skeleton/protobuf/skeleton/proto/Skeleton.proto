@@ -40,6 +40,7 @@ message Message {
 }
 
 message NoTable {
+    option (no_table) = true;
     option (handler) = true;
     string field1  = 1;
     string field2  = 2;
