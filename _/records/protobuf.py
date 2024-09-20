@@ -18,38 +18,47 @@ import google.protobuf.json_format
 
 import _
 
-from . import Protobuf_pb2
-
 
 class Protobuf(_.records.Record):
-    async def init(self, module, database=None):
+    async def init(self, module, database=None, options=None):
         # setup the container beforehand so the data module can use data decorators
         if hasattr(_, self.component_name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
+        if options is None:
+            raise _.error('Protobuf modules require options to be specified')
+        self._options = options
         self._container = ProtobufContainer()
         setattr(_, self.component_name, self._container)
-
         await super().init(module, database)
 
     def load(self, module):
         # iterate over all the members of the protobuf modules
         self.package = module.__package__ + '.'
+
+        try:
+            self._options = getattr(module, f'{self._options}_pb2')
+            no_table = getattr(self._options, 'no_table')
+            print(no_table)
+        except AttributeError:
+            raise _.error('Cannot find protobuf module "%s"', f'{self._options}_pb2')
+
         for member in dir(module):
             # all proto messages end with _pb2
             if not member.endswith('_pb2'):
                 continue
             # get a handle to the pb2 module descriptor
             pb2 = getattr(module, member)
+
             # iterate over all the message definitions
             for name,descriptor in pb2.DESCRIPTOR.message_types_by_name.items():
                 message = getattr(pb2, name)
 
-                table_options = message.DESCRIPTOR.GetOptions()
-                if self.db and not table_options.Extensions[Protobuf_pb2.no_table]:
+                options = message.DESCRIPTOR.GetOptions()
+                if self.db and not options.Extensions[self._options.no_table]:
                     table_type = self._proto_table(name, message=message)
                     self._container[name] = table_type
 
-                if table_options.Extensions[Protobuf_pb2.handler]:
+                if options.Extensions[self._options.handler]:
                     members = {
                         'name' : name,
                     }
@@ -84,7 +93,7 @@ class Protobuf(_.records.Record):
             col_options = field.GetOptions()
 
             # check if column should be primary key
-            is_primary_key = col_options.Extensions[Protobuf_pb2.pkey]
+            is_primary_key = col_options.Extensions[self._options.pkey]
             if is_primary_key:
                 if primary_key:
                     raise _.error('Only one primary key can be specified')
@@ -123,11 +132,11 @@ class Protobuf(_.records.Record):
                 column_type = sqlalchemy.orm.Mapped[column_type]
 
                 # check if column should be unique
-                unique = col_options.Extensions[Protobuf_pb2.uniq]
+                unique = col_options.Extensions[self._options.uniq]
 
                 # check for foreign key
-                if col_options.HasExtension(Protobuf_pb2.ref):
-                    print('TODO: FKEY:', col_options.Extensions[Protobuf_pb2.ref])
+                if col_options.HasExtension(self._options.ref):
+                    print('TODO: FKEY:', col_options.Extensions[self._options.ref])
 
                 annotations[field.name] = column_type
 
@@ -140,8 +149,8 @@ class Protobuf(_.records.Record):
 
         table_options = descriptor.GetOptions()
 
-        if table_options.HasExtension(Protobuf_pb2.id):
-            primary_key = table_options.Extensions[Protobuf_pb2.id]
+        if table_options.HasExtension(self._options.id):
+            primary_key = table_options.Extensions[self._options.id]
             members[primary_key] = sqlalchemy.orm.mapped_column(
                 sqlalchemy.INTEGER,
                 primary_key=True,

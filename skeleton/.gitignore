@@ -2,3 +2,4 @@
 *.db
 *.local
 *.pyc
+*_pb2.py

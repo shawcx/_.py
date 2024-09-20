@@ -2,16 +2,16 @@ syntax = "proto3";
 
 package skeleton.proto;
 
-import "_/records/Protobuf.proto";
+import "skeleton/proto/Protobuf.proto";
 
 message Skeleton {
-    option (_.records.handler) = true;
+    option (handler) = true;
     string field1  = 1;
     string field2  = 2;
 }
 
 message Reports {
-    option (_.records.handler) = true;
+    option (handler) = true;
 
     message Report {
         message Deep {
@@ -24,27 +24,28 @@ message Reports {
 
              Report single   = 1;
     repeated Report multiple = 2;
-             string req   = 3 [(_.records.required) = true];
+             string req   = 3 [(required) = true];
 }
 
 message Numbers {
-    option (_.records.no_table) = true;
+    option (no_table) = true;
     repeated int32 reports = 1;
 }
 
+
 message Message {
-    option (_.records.id) = 'message_id';
+    option (id) = 'message_id';
     string field1  = 1;
     string field2  = 2;
 }
 
 message NoTable {
-    option (_.records.handler) = true;
+    option (handler) = true;
     string field1  = 1;
     string field2  = 2;
 }
 
 message NoWeb {
-    string field1  = 1 [(_.records.pkey) = true];
+    string field1  = 1 [(pkey) = true];
     string field2  = 2;
 }
