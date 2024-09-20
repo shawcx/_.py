@@ -51,7 +51,10 @@ _.config.optionxform = str
 
 async def load(**kwds):
     # get the path of the caller
-    caller = inspect.getfile(_.application.__class__)
+    try:
+        caller = inspect.getfile(_.application.__class__)
+    except OSError:
+        caller = '.'
 
     # get the directory of the script
     root = kwds.get('root', None)
