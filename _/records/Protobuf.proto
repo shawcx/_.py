@@ -5,7 +5,7 @@ import "google/protobuf/descriptor.proto";
 extend google.protobuf.MessageOptions {
     string id         = 50001;
     bool   no_table   = 50002;
-    bool   handler    = 50003;
+    bool   no_handler = 50003;
 }
 
 extend google.protobuf.FieldOptions {

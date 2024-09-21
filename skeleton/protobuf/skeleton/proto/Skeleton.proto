@@ -5,14 +5,11 @@ package skeleton.proto;
 import "skeleton/proto/Protobuf.proto";
 
 message Skeleton {
-    option (handler) = true;
     string field1  = 1;
     string field2  = 2;
 }
 
 message Reports {
-    option (handler) = true;
-
     message Report {
         message Deep {
             string deep = 1;
@@ -28,7 +25,8 @@ message Reports {
 }
 
 message Numbers {
-    option (no_table) = true;
+    option (no_handler) = true;
+    option (no_table)   = true;
     repeated int32 reports = 1;
 }
 
@@ -40,13 +38,13 @@ message Message {
 }
 
 message NoTable {
-    option (no_table) = true;
-    option (handler) = true;
+    option (no_table)   = true;
     string field1  = 1;
     string field2  = 2;
 }
 
 message NoWeb {
+    option (no_handler) = true;
     string field1  = 1 [(pkey) = true];
     string field2  = 2;
 }

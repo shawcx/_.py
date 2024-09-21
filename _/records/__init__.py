@@ -6,8 +6,13 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import base64
+import dataclasses
+import datetime
 import importlib
 import json
+import logging
+import uuid
 
 import sqlalchemy
 import sqlalchemy.ext.asyncio
@@ -41,6 +46,50 @@ class Record:
 
     def load(self, module):
         raise NotImplementedError
+
+
+class RecordsInterface:
+    'base class for _.records'
+
+    def __call__(self, **kwds):
+        for k,v in kwds.items():
+            setattr(self, k, v)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    @classmethod
+    def _from_dict(cls, **kwds):
+        self = cls()
+        for k,v in kwds.items():
+            setattr(self, k, v)
+        return self
+
+    @classmethod
+    def _from_json(cls, msg):
+        return cls._from_dict(**json.loads(msg))
+
+    def _as_dict(self):
+        return dataclasses.asdict(self)
+
+    def _as_json(self, **kwds):
+        return json.dumps(self, cls=_Json, separators=(',',':'), **kwds)
+
+
+class _Json(json.JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, '_as_dict'):
+            return obj._as_dict()
+        if isinstance(obj, bytes):
+            return base64.b64encode(obj).decode('ascii')
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        if isinstance(obj, datetime.datetime):
+            return str(obj)
+        return json.JSONEncoder.default(self, obj)
 
 
 class HandlerInterface(_.handlers.Protected):

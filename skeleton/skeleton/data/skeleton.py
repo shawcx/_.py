@@ -7,7 +7,6 @@ import _
 
 import skeleton
 
-@_.data.handler()
 class skel:
     field1 : str = _.data.pkey()
     field2 : int = 100 # _.data.uniq(100)
@@ -16,13 +15,13 @@ class skel:
     lat    : float #= _.data.uniq('geo')
     lng    : float #= _.data.uniq('geo')
 
+@_.data.no_handler
 class exo:
     class sub:
         v : int = 0
     s : sub
     u : uuid.UUID
 
-@_.data.no_handler
 @_.data.no_table
 class custom:
     field1 : str
@@ -30,15 +29,19 @@ class custom:
     field3 : int = None
 
 
-@_.data.handler(custom)
+@_.data.handles(custom)
 class custom_handler:
-    async def get(self, record_id):
+    async def get(self, record_id=None):
         if not record_id:
             records = []
             for d in ['a','b','c']:
-                r = _.data.custom(field1=d, field3=ord(d))
-                records.append(r.dict())
+                r = _.data.custom()
+                r.field1=d
+                r.field3=ord(d)
+                records.append(r._as_dict())
             self.write({'data':records})
         else:
-            record = _.data['custom'](field1=record_id,field3=200)
-            self.write(record.json())
+            record = _.data['custom']()
+            record.field1=record_id
+            record.field3=200
+            self.write(record._as_dict())

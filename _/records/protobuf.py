@@ -13,6 +13,7 @@ import sys
 import typing
 
 import sqlalchemy
+import tornado.web
 import google.protobuf.message
 import google.protobuf.json_format
 
@@ -51,24 +52,28 @@ class Protobuf(_.records.Record):
                 options = message.DESCRIPTOR.GetOptions()
 
                 if self.db and not options.Extensions[self._options.no_table]:
-                    table_type = self._proto_table(name, message=message)
-                    self._container[name] = table_type
+                    record_type = self._proto_table(name, message=message)
+                else:
+                    record_type = type(name, (ProtoInterface,), {'_ProtoInterface__pb' : message,})
 
-                    if options.Extensions[self._options.handler]:
-                        self._proto_handler(name, table_type)
+                self._container[name] = record_type
 
-    def _proto_handler(self, name, table_type):
+                if not options.Extensions[self._options.no_handler]:
+                    self._proto_handler(name, record_type)
+
+    def _proto_handler(self, name, record_type):
         members = {
             'component' : name,
             'db'        : self.db,
-            'record'    : table_type,
+            'record'    : record_type,
         }
         ## check if a custom handler was defined
-        proto_handler = self._container._handler.get(name)
-        print(proto_handler)
-        types = [proto_handler] if proto_handler else []
-        # add the base records handler
-        types.append(_.records.HandlerInterface)
+        proto_handler = self._container._handlers.get(name)
+        if proto_handler:
+            name = proto_handler.__name__
+
+        types = [proto_handler] if proto_handler else [_.records.HandlerInterface]
+        types.append(tornado.web.RequestHandler)
 
         record_handler = type(name, tuple(types), _.prefix(members))
         _.application._record_handler(self.component_name, record_handler)
@@ -213,8 +218,7 @@ class Protobuf(_.records.Record):
         ]
 
 
-
-class ProtoInterface:
+class ProtoInterface(_.records.RecordsInterface):
     @staticmethod
     def __descriptor(cls, descriptor, msg, dst):
         for field in descriptor.fields:
@@ -285,11 +289,11 @@ class ProtoInterface:
 class ProtobufContainer(_.Container):
     def __init__(self):
         super().__init__()
-        self._handler = {}
+        self._handlers = {}
 
     # decorator for adding custom handlers for message types
-    def handler(self, _message):
+    def handles(self, _message):
         def wrap(_handler):
-            self._handler[_message.DESCRIPTOR.name] = _handler
+            self._handlers[_message.DESCRIPTOR.name] = _handler
             return _handler
         return wrap

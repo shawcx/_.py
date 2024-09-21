@@ -2,11 +2,13 @@
 import dataclasses
 import functools
 import inspect
+import logging
 import json
 import typing
 import uuid
 
 import sqlalchemy
+import tornado.web
 
 import _
 
@@ -31,23 +33,47 @@ class Data(_.records.Record):
                 continue
 
             # ignore objects that are not classes
-            attr = getattr(module, name)
-            if not isinstance(attr, type(Data)):
+            cls = getattr(module, name)
+            if not isinstance(cls, type(Data)):
                 continue
 
             # ignore classes outside of module root
-            if not attr.__module__.startswith(module.__name__):
+            if not cls.__module__.startswith(module.__name__):
                 continue
 
-            if self.db and not hasattr(attr, f'_{name}__no_table'):
-                table_type = self._data_table(name, attr)
-                self._container[name] = table_type
+            if self.db and not hasattr(cls, f'_{name}__no_table'):
+                try:
+                    record_type = self._data_table(name, cls)
+                except Exception as e:
+                    logging.exception('%s', e)
+            else:
+                if not dataclasses.is_dataclass(cls):
+                    cls = dataclasses.dataclass(init=False, kw_only=True)(cls)
+                record_type = type(name, (DataInterface,cls), {})
 
-    def _data_table(self, name, dataclass, parent=None, parent_key=None, parent_col=None):
-        # make class a dataclass if it isn't already
-        if not dataclasses.is_dataclass(dataclass):
-            dataclass = dataclasses.dataclass(init=True, kw_only=True)(dataclass)
+            self._container[name] = record_type
 
+            if not hasattr(cls, f'_{name}__no_handler'):
+                self._data_handler(name, record_type)
+
+    def _data_handler(self, name, record_type):
+        members = {
+            'component' : name,
+            'db'        : self.db,
+            'record'    : record_type,
+        }
+
+        data_handler = self._container._handlers.get(name)
+        if data_handler:
+            name = data_handler.__name__
+
+        types = [data_handler] if data_handler else [_.records.HandlerInterface]
+        types.append(tornado.web.RequestHandler)
+
+        record_handler = type(name, tuple(types), _.prefix(members))
+        _.application._record_handler(self.component_name, record_handler)
+
+    def _data_table(self, name, cls, parent=None, parent_key=None, parent_col=None):
         child_tables = {}
         annotations = {}
         members = {
@@ -55,11 +81,12 @@ class Data(_.records.Record):
             '__annotations__' : annotations,
             }
 
-        #members.update(dict(db=self.db, table=name))
-        #types.append(_.records.DatabaseInterface)
+        # make class a dataclass if it isn't already
+        if not dataclasses.is_dataclass(cls):
+            cls = dataclasses.dataclass(init=False, kw_only=True)(cls)
 
         primary_key = None
-        for field in dataclasses.fields(dataclass):
+        for field in dataclasses.fields(cls):
             # check if column should be primary key
             is_primary_key = field.metadata.get('pkey', False)
             if is_primary_key:
@@ -118,7 +145,8 @@ class Data(_.records.Record):
 
         return table_type
 
-class DataInterface:
+
+class DataInterface(_.records.RecordsInterface):
     @staticmethod
     def __dataclass(cls, msg, dst):
         for field in dataclasses.fields(cls):
@@ -153,28 +181,19 @@ class DataContainer(_.Container):
     def __init__(self):
         super().__init__()
         self._ignore = set()
-        self._handler = {}
+        self._handlers = {}
 
     # decorator for adding custom handlers for message types
-    def handler(self, arg=None):
+    def handles(self, _datacls):
         def wrap(_handler):
-            if arg:
-                self._ignore.add(_handler.__name__)
-                name = arg.__name__
-            else:
-                name = _handler.__name__
-            self._handler[name] = _handler
+            self._ignore.add(_handler.__name__)
+            self._handlers[_datacls.__name__] = _handler
             return _handler
         return wrap
 
     @staticmethod
     def dump(obj):
         return Interface.dump(obj)
-
-    @staticmethod
-    def db(cls):
-        setattr(cls, f'_{cls.__name__}__db', True)
-        return cls
 
     @staticmethod
     def no_table(cls):

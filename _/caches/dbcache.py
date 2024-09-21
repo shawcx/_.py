@@ -15,7 +15,7 @@ import typing
 import sqlalchemy
 
 import _
-
+import _.records
 
 class DbCache(_.caches.Cache):
     _config  = 'config'
@@ -37,7 +37,7 @@ class DbCache(_.caches.Cache):
                 raise _.error('dbcache requires a database to be specified')
         self.db = _.databases[database]
 
-        self.config_table = type(self._config, (_.databases.Base,), {
+        self.config_table = type(self._config, (_.records.RecordsInterface,_.databases.Base,), {
             '__tablename__'   : self._config,
             '__annotations__' : {
                 self._key_col : typing.Optional[str],
@@ -66,7 +66,7 @@ class DbCache(_.caches.Cache):
             annotations[col] = typing.Optional[__builtins__.get(dbtype)]
             columns[col] = sqlalchemy.orm.mapped_column(init=False)
 
-        self.session_table = type(self._table, (_.databases.Base,), columns)
+        self.session_table = type(self._table, (_.records.RecordsInterface, _.databases.Base,), columns)
 
         await self.db.create_tables()
 
