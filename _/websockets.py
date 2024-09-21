@@ -13,9 +13,11 @@ import _
 
 class WebSocket(tornado.websocket.WebSocketHandler):
     '''Tweak the default WebSocket behavior for more responsive behavior'''
+    websockets = {}
 
-    def initialize(self, websockets):
-        self.websockets = websockets
+    def initialize(self, websockets=None):
+        if websockets:
+            self.websockets = websockets
 
     def check_origin(self, origin):
         if _.args.debug:

@@ -109,7 +109,7 @@ async def load(**kwds):
         raise _.error('Unable to parse file: %s', e)
 
     if not ok:
-        raise _.error('Unable to read config file(s):\n  %s', '\n  '.join(ini_files))
+        logging.warning('Unable to read config file(s):\n  %s', '\n  '.join(ini_files))
 
     try:
         await _.components.load('databases')
