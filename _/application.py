@@ -112,6 +112,12 @@ class Application(tornado.web.Application):
             ( r'/(favicon.ico)', tornado.web.StaticFileHandler, {'path':''}),
             )
 
+        prefix = _.config.get(_.name, 'prefix', fallback='')
+        if prefix:
+            if not prefix[0] == '/':
+                prefix = '/' + prefix
+            patterns = [(f'{prefix}{r[0]}',) + tuple(r[1:]) for r in patterns]
+
         if _.args.debug:
             for (pattern,cls,*params) in patterns:
                 handler = f'{cls.__module__}.{cls.__name__}'
