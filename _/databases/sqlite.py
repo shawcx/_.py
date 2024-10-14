@@ -16,9 +16,10 @@ try:
 except ImportError:
     raise _.error('Missing aiosqlite module')
 
-
 logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
+import sqlalchemy
+import sqlalchemy.engine
 import sqlalchemy.dialects.sqlite
 
 #aiosqlite.register_adapter(bool, int)
@@ -38,8 +39,8 @@ class UUID(sqlalchemy.types.TypeDecorator):
         if value is None:
             return value
         if not isinstance(value, uuid.UUID):
-            return "%.32x" % uuid.UUID(value).int
-        return "%.32x" % value.int
+            return '%.32x' % uuid.UUID(value).int
+        return '%.32x' % value.int
 
     def process_result_value(self, value, dialect):
         if value is None:
@@ -61,3 +62,10 @@ class SQLite(_.databases.Database):
     async def init(self, component_name, **kwds):
         await super(SQLite, self).init(component_name, **kwds)
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)
+
+
+@sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, 'connect')
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()

@@ -94,9 +94,16 @@ class Data(_.records.Record):
                     raise _.error('Only one primary key can be specified')
                 primary_key = field.name
 
-            unique = field.metadata.get('unique', False)
+            uniq = field.metadata.get('uniq', False)
+            refs = field.metadata.get('refs', None)
 
-            if field.type.__module__.startswith(self.module.__name__):
+            if refs:
+                annotations[field.name] = sqlalchemy.orm.Mapped[typing.Optional[field.type]]
+                members[field.name] = sqlalchemy.orm.mapped_column(
+                    sqlalchemy.ForeignKey(refs, ondelete="CASCADE"),
+                    init=False,
+                    )
+            elif field.type.__module__.startswith(self.module.__name__):
                 ref_table_name = f'{name}_{field.name}'
                 annotations[field.name] = sqlalchemy.orm.Mapped[typing.Optional[ref_table_name]]
                 members[field.name] = sqlalchemy.orm.relationship(
@@ -110,7 +117,7 @@ class Data(_.records.Record):
                 annotations[field.name] = typing.Optional[field.type]
                 members[field.name] = sqlalchemy.orm.mapped_column(
                     primary_key=is_primary_key,
-                    unique=unique,
+                    unique=uniq,
                     init=False,
                     )
 
@@ -125,7 +132,7 @@ class Data(_.records.Record):
 
         if parent and parent_key and parent_col:
             members[f'{parent}_{parent_key}'] = sqlalchemy.orm.mapped_column(
-                sqlalchemy.ForeignKey(f'{parent}.{parent_key}'),
+                sqlalchemy.ForeignKey(f'{parent}.{parent_key}', ondelete="CASCADE"),
                 init=False,
                 )
             members[f'{parent}'] = sqlalchemy.orm.relationship(
@@ -207,33 +214,12 @@ class DataContainer(_.Container):
 
     @staticmethod
     def pkey(arg=dataclasses.MISSING):
-        kwds = {'metadata':{'pkey':True}}
-        if isinstance(arg, dataclasses.Field):
-            kwds['metadata'].update(arg.metadata)
-            kwds['default'] = arg.default
-            kwds['default_factory'] = arg.default_factory
-        elif inspect.isfunction(arg):
-            kwds['default_factory'] = arg
-        elif arg is not dataclasses.MISSING:
-            kwds['default'] = arg
-        return dataclasses.field(**kwds)
+        return dataclasses.field(metadata={'pkey':True})
 
     @staticmethod
     def uniq(group=None, arg=dataclasses.MISSING):
-        if not isinstance(group, str):
-            arg = group
-            group = None
-        kwds = {'metadata':{'unique':group}}
-        if isinstance(arg, dataclasses.Field):
-            kwds['metadata'].update(arg.metadata)
-            kwds['default'] = arg.default
-            kwds['default_factory'] = arg.default_factory
-        elif inspect.isfunction(arg):
-            kwds['default_factory'] = arg
-        elif arg is not dataclasses.MISSING:
-            kwds['default'] = arg
-        return dataclasses.field(**kwds)
+        return dataclasses.field(metadata={'uniq':True})
 
-    #@staticmethod
-    #def ref(foreign, key=None):
-    #    return dataclasses.field(metadata={'ref':foreign,'key':key})
+    @staticmethod
+    def refs(table_column):
+        return dataclasses.field(metadata={'refs':table_column})

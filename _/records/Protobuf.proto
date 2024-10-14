@@ -12,6 +12,6 @@ extend google.protobuf.FieldOptions {
     bool   pkey       = 50001;
     bool   uniq       = 50002;
     bool   required   = 50003;
-    string ref        = 50004;
+    string refs       = 50004;
     string paired     = 50005;
 }

@@ -18,6 +18,7 @@ setuptools.setup(
     zip_safe             = False,
     install_requires = [
         'tornado',
+        'sqlalchemy',
         ],
     classifiers=[
         'Development Status :: 3 - Alpha',

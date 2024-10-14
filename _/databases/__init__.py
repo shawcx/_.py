@@ -110,4 +110,3 @@ class Base(
     type_annotation_map = {
         int: sqlalchemy.BIGINT,
     }
-
