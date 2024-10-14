@@ -20,13 +20,13 @@ import _.records
 class DbCache(_.caches.Cache):
     _config  = 'config'
     _key_col = 'key'
-    _key     = 'cookie'
     _val_col = 'value'
+    _key     = 'cookie'
 
     _table       = 'sessions'
     _session_col = 'session_id'
 
-    async def init(self, component_name, database=None, table=None, **kwds):
+    async def init(self, component_name, database=None, **kwds):
         if not hasattr(_.application, 'is_session_expired'):
             raise _.error('Application does not have is_session_expired function defined')
 
@@ -40,7 +40,7 @@ class DbCache(_.caches.Cache):
         self.config_table = type(self._config, (_.records.RecordsInterface,_.databases.Base,), {
             '__tablename__'   : self._config,
             '__annotations__' : {
-                self._key_col : typing.Optional[str],
+                self._key_col : str,
                 self._val_col : typing.Optional[str],
                 },
             '__primary_key__' : self._key_col,
@@ -49,8 +49,7 @@ class DbCache(_.caches.Cache):
             })
 
         annotations = {
-            self._session_col : typing.Optional[str],
-            self._val_col     : typing.Optional[str],
+            self._session_col : str,
             }
         # create the session table
         columns = {
@@ -58,7 +57,6 @@ class DbCache(_.caches.Cache):
             '__annotations__' : annotations,
             '__primary_key__' : self._session_col,
             self._session_col : sqlalchemy.orm.mapped_column(primary_key=True, init=False),
-            self._val_col    : sqlalchemy.orm.mapped_column(init=False),
             }
         for col,dbtype in kwds.items():
             if not dbtype:
@@ -76,6 +74,7 @@ class DbCache(_.caches.Cache):
         members = dict(
             component  = component_name,
             db         = self.db,
+            cls        = self.session_table,
             table      = self._table,
             session_id = self._session_col,
             )
@@ -118,13 +117,11 @@ class DbCacheSessions(_.handlers.Protected):
     @_.auth.protected
     async def get(self, session_id=None):
         if session_id:
-            record = await self._db.find_one(self._table, self._session_col, session_id)
-            self.write(record)
+            record = await self._db.find_one(self._cls, session_id)
+            self.write(record._as_dict())
         else:
-            records = await self._db.find(self._table)
-            data = []
-            for record in records:
-                data.append(dict(record))
+            records = await self._db.find(self._cls)
+            data = [r._as_dict() for f in records]
             self.write({'data':data})
 
     @_.auth.protected
