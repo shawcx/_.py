@@ -16,7 +16,7 @@ class WebSocket(tornado.websocket.WebSocketHandler):
     websockets = {}
 
     def initialize(self, websockets=None):
-        if websockets:
+        if websockets is not None:
             self.websockets = websockets
 
     def check_origin(self, origin):
