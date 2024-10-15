@@ -97,18 +97,19 @@ class HandlerInterface(_.handlers.Protected):
         self.set_header('Content-Type', 'application/json; charset=UTF-8')
         if self.request.body:
             try:
-                self.json = json.loads(self.request.body)
+                self.data = json.loads(self.request.body)
             except:
                 raise _.HTTPError(500)
         else:
-            self.json = None
+            self.data = None
 
     def load(self, kwds=None):
-        return self._record(kwds or self.json)
+        print(f'???? HandlerInterface::load({kwds})')
+        return self._record(kwds or self.data)
 
     @_.auth.protected
     async def get(self, record_id):
-        if record_id is None:
+        if not record_id:
             records = await self._db.find(self._record)
             self.write(dict(data=[r._as_dict() for r in records]))
         else:
@@ -120,7 +121,7 @@ class HandlerInterface(_.handlers.Protected):
     @_.auth.protected
     async def post(self, record_id, record=None):
         if record is None:
-            record = self._record._from_json(self.json)
+            record = self._record._from_dict(self.data)
         try:
             await self._db.insert(record)
         except _.error as e:
@@ -131,7 +132,7 @@ class HandlerInterface(_.handlers.Protected):
     @_.auth.protected
     async def put(self, record_id, record=None):
         if record is None:
-            record = self._record._from_json(self.json)
+            record = self._record._from_dict(self.data)
         try:
             await self._db.upsert(record)
         except _.error as e:

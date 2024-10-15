@@ -35,6 +35,7 @@ class Database:
         self = cls()
         self.component_name = component_name
         _.databases[component_name] = self
+        setattr(_, component_name, self)
         await self.init(component_name, **kwds)
 
     async def init(self, component_name, **kwds):

@@ -163,11 +163,13 @@ class DataInterface(_.records.RecordsInterface):
                 DataInterface.__dataclass(child_cls, msg.get(field.name), child)
                 setattr(dst, field.name, child)
             else:
-                setattr(dst, field.name, msg.get(field.name))
+                if field.name in msg:
+                    setattr(dst, field.name, msg[field.name])
 
     def __call__(self, *args, **kwds):
         msg = args[0] if args else kwds
         self.__dataclass(self, msg, self)
+        return self
 
     @classmethod
     def _from_dict(cls, *args, **kwds):

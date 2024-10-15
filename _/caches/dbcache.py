@@ -121,7 +121,7 @@ class DbCacheSessions(_.handlers.Protected):
             self.write(record._as_dict())
         else:
             records = await self._db.find(self._cls)
-            data = [r._as_dict() for f in records]
+            data = [r._as_dict() for r in records]
             self.write({'data':data})
 
     @_.auth.protected
