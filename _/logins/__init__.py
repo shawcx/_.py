@@ -13,7 +13,7 @@ class Login(tornado.web.RequestHandler):
         # add a reference to the component name accessible by the new type
         members = _.prefix(kwds)
         members['_component'] = component_name
-        login_cls = type(component_name, (cls,), members)
+        login_cls = type(cls.__name__, (cls,), members)
         try:
             await login_cls.init(component_name, **kwds)
         except TypeError as e:

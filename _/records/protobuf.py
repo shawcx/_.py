@@ -33,6 +33,7 @@ class Protobuf(_.records.Record):
         await super().init(module, database)
 
     def load(self, module):
+        self.module_name = module.__name__
         try:
             self._options = getattr(module, f'{self._options}_pb2')
             no_table = getattr(self._options, 'no_table')
@@ -66,6 +67,7 @@ class Protobuf(_.records.Record):
             'component' : name,
             'db'        : self.db,
             'record'    : record_type,
+            '_module__' : self.module_name,
         }
         ## check if a custom handler was defined
         proto_handler = self._container._handlers.get(name)

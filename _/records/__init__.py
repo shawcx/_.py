@@ -103,10 +103,6 @@ class HandlerInterface(_.handlers.Protected):
         else:
             self.data = None
 
-    def load(self, kwds=None):
-        print(f'???? HandlerInterface::load({kwds})')
-        return self._record(kwds or self.data)
-
     @_.auth.protected
     async def get(self, record_id):
         if not record_id:

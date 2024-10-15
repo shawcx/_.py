@@ -78,7 +78,7 @@ class DbCache(_.caches.Cache):
             table      = self._table,
             session_id = self._session_col,
             )
-        subclass = type(component_name, (DbCacheSessions,), _.prefix(members))
+        subclass = type('Sessions', (Sessions,), _.prefix(members))
         _.application._record_handler('sessions', subclass)
 
     async def cookie_secret(self):
@@ -113,7 +113,7 @@ class DbCache(_.caches.Cache):
                 await self.db.delete(record)
 
 
-class DbCacheSessions(_.handlers.Protected):
+class Sessions(_.handlers.Protected):
     @_.auth.protected
     async def get(self, session_id=None):
         if session_id:

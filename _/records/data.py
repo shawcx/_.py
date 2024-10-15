@@ -20,11 +20,10 @@ class Data(_.records.Record):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
         self._container = DataContainer()
         setattr(_, self.component_name, self._container)
-
         await super().init(module, database)
 
     def load(self, module):
-        self.module = module
+        self.module_name = module.__name__
         for name in dir(module):
             if name.startswith('__'):
                 continue
@@ -38,7 +37,7 @@ class Data(_.records.Record):
                 continue
 
             # ignore classes outside of module root
-            if not cls.__module__.startswith(module.__name__):
+            if not cls.__module__.startswith(self.module_name):
                 continue
 
             if self.db and not hasattr(cls, f'_{name}__no_table'):
@@ -61,6 +60,7 @@ class Data(_.records.Record):
             'component' : name,
             'db'        : self.db,
             'record'    : record_type,
+            '_module__' : self.module_name,
         }
 
         data_handler = self._container._handlers.get(name)
@@ -103,7 +103,7 @@ class Data(_.records.Record):
                     sqlalchemy.ForeignKey(refs, ondelete="CASCADE"),
                     init=False,
                     )
-            elif field.type.__module__.startswith(self.module.__name__):
+            elif field.type.__module__.startswith(self.module_name):
                 ref_table_name = f'{name}_{field.name}'
                 annotations[field.name] = sqlalchemy.orm.Mapped[typing.Optional[ref_table_name]]
                 members[field.name] = sqlalchemy.orm.relationship(
