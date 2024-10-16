@@ -182,6 +182,10 @@ class Application(tornado.web.Application):
         '''underscore apps should override this function if a login is specified'''
         raise NotImplementedError
 
+    async def on_login_failure(self, component, *args, **kwds):
+        '''underscore apps should override this function if a login is specified'''
+        raise NotImplementedError
+
     def task(self, fn, *args, **kwds):
         async def _task():
             await _.wait(fn(*args, **kwds))

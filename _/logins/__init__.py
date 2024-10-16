@@ -48,6 +48,11 @@ class Login(tornado.web.RequestHandler):
         self.redirect(self.next_url)
 
     async def on_login_failure(self, message='Invalid Login'):
+        try:
+            ret = self.application.on_login_failure(self._component)
+        except NotImplementedError:
+            ret = False
+
         url = self.get_login_url()
         url += "?" + urllib.parse.urlencode(dict(message=message, next_url=self.next_url))
         self.clear_cookie('session_id')
