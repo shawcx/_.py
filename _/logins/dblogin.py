@@ -15,6 +15,7 @@ import sqlalchemy
 import _
 import _.records
 
+
 class DbLogin(_.logins.Login):
     _table    = 'users'
     _username = 'username'
@@ -77,7 +78,7 @@ class DbLogin(_.logins.Login):
             'username'  : cls._username,
             'password'  : cls._password,
         }
-        subclass = type('Records', (DBLoginRecords,), _.prefix(members))
+        subclass = type('DBLoginRecords', (DBLoginRecords,), _.prefix(members))
         _.application._record_handler('logins', subclass)
 
     @classmethod
@@ -155,7 +156,7 @@ class DbLogin(_.logins.Login):
 class DBLoginRecords(_.handlers.Protected):
     # READ
     @_.auth.protected
-    async def get(self, component_name, username=None):
+    async def get(self, username=None):
         if username:
             record = await self._db.find_one(self._table, username)
             record = record._as_dict()
@@ -174,38 +175,38 @@ class DBLoginRecords(_.handlers.Protected):
     @_.auth.protected
     async def put(self, username=None):
         try:
-            user = json.loads(self.request.body)
+            data = json.loads(self.request.body)
         except json.decoder.JSONDecodeError:
             raise _.HTTPError(500)
 
-        username = user.get(self._username, None)
-        password = user.pop(self._password, None)
+        username = data.get(self._username, None)
+        password = data.pop(self._password, None)
         if not username or not password:
             raise _.HTTPError(500)
 
         entry = dict(_.config[self._component])
+        entry.pop('database', None)
+        entry.pop('table', None)
         prune = list(entry.keys()) + [self._username, self._password]
-        for key in list(user.keys()):
+
+        for key in list(data.keys()):
             if key not in prune:
-                user.pop(key)
+                data.pop(key)
 
-    # TODO: this needs to be updated
-        record = dict((k,None) for k in entry)
-        record.pop('database', None)
-        record.pop('table',    None)
-        record.update(user)
+        user = self._table()
+        user(**data)
 
-        callback = getattr(_.application, f'on_{self._component}_update', None)
+        callback = getattr(_.application, f'on_{self._component}_add_user', None)
         if callback is None:
-            callback = getattr(_.application, 'on_dblogin_update', None)
+            callback = getattr(_.application, 'on_dblogin_add_user', None)
         if callback:
-            await _.wait(callback(self._component, record))
+            await _.wait(callback(self._component, user))
 
-        if not self._password not in record:
+        if not user[self._password]:
             password = _.auth.simple_hash(username + password)
-            record[self._password] = password
+            user[self._password] = password
 
-        await self._db.insert(record)
+        await self._db.insert(user)
         self.set_status(204)
 
     # DELETE

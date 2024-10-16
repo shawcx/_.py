@@ -66,17 +66,19 @@ class Database:
             raise _.error('%s', e) from None
 
     # READ
-    async def find(self, cls, where=None):
+    async def find(self, cls, value=None, column=None):
         statement = sqlalchemy.select(cls)
+        if value:
+            column = getattr(cls, column or cls.__primary_key__)
+            statement = statement.where(column == value)
         async with self.session() as session:
             results = await session.execute(statement)
             return results.unique().scalars().all()
 
     async def find_one(self, cls, value, column=None):
         statement = sqlalchemy.select(cls)
-        if value:
-            column = getattr(cls, column or cls.__primary_key__)
-            statement = statement.where(column == value)
+        column = getattr(cls, column or cls.__primary_key__)
+        statement = statement.where(column == value)
         async with self.session() as session:
             results = await session.execute(statement)
             return results.unique().scalars().first()

@@ -126,12 +126,12 @@ class Sessions(_.handlers.Protected):
 
     @_.auth.protected
     async def delete(self, session_id=None):
-        self.set_status(204)
         if session_id:
-            await self._db.delete(self._table, self._session_col, session_id)
+            await self._db.delete(self._cls, session_id)
 
             callback = getattr(_.application, f'on_{self._component}_delete', None)
             if callback is None:
                 callback = getattr(_.application, 'on_dbcache_delete', None)
             if callback:
-                await _.wait(callback(self._component, record))
+                await _.wait(callback(self._component, session_id))
+        self.set_status(204)
