@@ -39,7 +39,10 @@ class Cache:
     def save_session(self, session):
         raise NotImplementedError
 
-    async def load_session(self, session_id):
+    def load_session(self, session_id):
+        raise NotImplementedError
+
+    def clear_session(self, session_id):
         raise NotImplementedError
 
 

@@ -99,12 +99,17 @@ class DbCache(_.caches.Cache):
         await self.db.upsert(session)
 
     async def load_session(self, session_id):
-        record = await self.db.find_one(self.session_table, session_id)
-        if not record:
+        session = await self.db.find_one(self.session_table, session_id)
+        if not session:
             return None
-        if await _.wait(_.application.is_session_expired(record, self._expires)):
+        if await _.wait(_.application.is_session_expired(session, self._expires)):
             return None
-        return record
+        return session
+
+    async def clear_session(self, session_id):
+        session = await self.db.find_one(self.session_table, session_id)
+        if session:
+            await self.db.delete(session)
 
     async def clear_stale_sessions(self):
         for record in await self.db.find(self.session_table):

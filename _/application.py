@@ -153,7 +153,7 @@ class Application(tornado.web.Application):
             )
 
     async def initialize(self):
-        '''underscore apps should override this function'''
+        '''underscore app entry point'''
         raise NotImplementedError
 
     async def logging(self):
@@ -178,13 +178,17 @@ class Application(tornado.web.Application):
         if _.sessions is not None:
             return await _.wait(_.sessions.cookie_secret())
 
-    async def on_login(self, handler, user, *args, **kwds):
-        '''underscore apps should override this function if a login is specified'''
+    async def on_login_success(self, handler, user, *args, **kwds):
+        '''underscore apps should override this function if a login component is specified'''
         raise NotImplementedError
 
     async def on_login_failure(self, component, *args, **kwds):
-        '''underscore apps should override this function if a login is specified'''
-        raise NotImplementedError
+        '''underscore apps should override this function if a login component is specified'''
+        pass
+
+    async def on_logout(self, sessions_id):
+        '''underscore apps should override this function if a login component is specified'''
+        pass
 
     def task(self, fn, *args, **kwds):
         async def _task():

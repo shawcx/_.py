@@ -22,7 +22,7 @@ class Login(tornado.web.RequestHandler):
         _.application._login_handler('login', login_cls)
 
     @classmethod
-    async def init(cls, component_name):
+    async def init(cls, component_name, **kwds):
         pass
 
     @classmethod
@@ -37,21 +37,19 @@ class Login(tornado.web.RequestHandler):
         self.next_url = self.get_argument('next', '/')
         self.redirect_uri = f'{self.request.protocol}://{self.request.host}/login/{self._component}?next={self.next_url}'
 
-    async def on_login_success(self, record):
-        fn = getattr(self.application, f'on_{self._component}_login', self.application.on_login)
+    async def on_login_success(self, user):
+        fn = getattr(self.application, f'on_{self._component}_login_success', self.application.on_login_success)
         try:
-            session = await _.wait(fn(self, record))
+            session = await _.wait(fn(self, user))
             await _.wait(_.sessions.save_session(session))
             self.set_secure_cookie('session_id', session['session_id'], expires_days=1)
         except NotImplementedError:
-            raise _.HTTPError(500, 'on_login method not implemented') from None
+            raise _.HTTPError(500, 'on_login_success method not implemented') from None
         self.redirect(self.next_url)
 
     async def on_login_failure(self, message='Invalid Login'):
-        try:
-            ret = self.application.on_login_failure(self._component)
-        except NotImplementedError:
-            ret = False
+        fn = getattr(self.application, f'on_{self._component}_login_failure', self.application.on_login_failure)
+        await _.wait(fn(self._component))
 
         url = self.get_login_url()
         url += "?" + urllib.parse.urlencode(dict(message=message, next_url=self.next_url))
@@ -72,6 +70,13 @@ class LoginPage(tornado.web.RequestHandler):
 
 
 class Logout(tornado.web.RequestHandler):
-    def get(self):
+    async def get(self):
+        session_id = self.get_secure_cookie('session_id', max_age_days=1)
+
+        if session_id:
+            session_id = session_id.decode('utf-8')
+            await _.wait(self.application.on_logout(session_id))
+            self.session = await _.wait(_.sessions.clear_session(session_id))
+
         self.clear_cookie('session_id')
         self.redirect(self.get_argument('next', '/'))

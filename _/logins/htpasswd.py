@@ -20,14 +20,6 @@ import _
 
 
 class Htpasswd(_.logins.Login):
-    @classmethod
-    async def init(cls, component_name, **kwds):
-        pass
-
-    @classmethod
-    async def args(cls, component_name):
-        pass
-
     async def post(self):
         username = self.get_argument('username', '')
         password = self.get_argument('password', '')

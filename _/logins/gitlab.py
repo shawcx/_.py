@@ -6,7 +6,7 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
-# This is for logging into GitLab servers and serve as an example
+# This is for logging into GitLab servers and serves as an example
 # of implementing an OAuth2 handler for any service that supports it
 
 # For admins go to http(s)://your.gitlab.server/admin/applications and click "New application"
@@ -29,6 +29,15 @@
 # Click "Continue"
 #
 # Your underscore app can now authenticate via your GitLab server
+#
+
+# [logins]
+# gitlab
+#
+# [gitlab]
+# gitlab        = https://your.gitlab.server
+# client_id     = <client_id>
+# client_secret = <client_secret>
 
 
 import _

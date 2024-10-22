@@ -98,13 +98,14 @@ class DbLogin(_.logins.Login):
             record[cls._username] = username
             record[cls._password] = password
 
+            user = cls._table._from_dict(**record)
+
             callback = getattr(_.application, f'on_{component_name}_add_user', None)
             if callback is None:
                 callback = getattr(_.application, 'on_dblogin_add_user', None)
             if callback:
-                await _.wait(callback(component_name, record))
+                await _.wait(callback(component_name, user))
 
-            user = cls._table._from_dict(**record)
             await cls._db.upsert(user)
             _.application.stop()
 

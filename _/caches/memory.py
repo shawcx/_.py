@@ -45,6 +45,9 @@ class Memory(_.caches.Cache):
             return None
         return session
 
+    def clear_session(self, session_id):
+        self.sessions.pop(session_id, None)
+
 
 class MemorySessions(_.handlers.Protected):
     @_.auth.protected

@@ -66,6 +66,9 @@ class Redis(_.caches.Cache):
             return None
         return json.loads(session)
 
+    async def clear_session(self, session_id):
+        session = await self.redis.delete(f'session/{session_id}')
+
     # fall through for calling redis functions directly
     def __getattr__(self, attr):
         return getattr(self.redis, attr)

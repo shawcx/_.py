@@ -39,13 +39,13 @@ class OAuth2(tornado.auth.GoogleOAuth2Mixin):
                 # the OAuth2 service will callback with a code
                 # pass it to the get_authenticated_user function defined
                 # in GitLabAuthMixin
-                oauth = await self.get_authenticated_user(
+                self.oauth = await self.get_authenticated_user(
                     redirect_uri = self.redirect_uri,
                     code         = code,
                     )
                 user = await self.oauth2_request(
                     self._OAUTH_USERINFO_URL,
-                    access_token = oauth["access_token"]
+                    access_token = self.oauth["access_token"]
                     )
                 await self.on_login_success(user)
             except tornado.httpclient.HTTPClientError as e:

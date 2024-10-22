@@ -29,10 +29,6 @@ class Slap(_.logins.Login):
             )
 
     @classmethod
-    async def args(cls, component_name):
-        pass
-
-    @classmethod
     async def check(cls, username, password):
         try:
             dn = cls.dn.format(username)
