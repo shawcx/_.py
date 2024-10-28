@@ -76,12 +76,12 @@ async def load(**kwds):
     _.paths = _.Paths(root=root, ns=_.ns)
 
     # if ns is not passed in use the supplied or derived ns
-    ini_name = _.ns or _.name
+    ini_name = _.name or _.ns
 
     ini_files = [
         _.paths(f'{ini_name}.ini'),
         _.paths(f'{ini_name}.ini.local'),
-        os.path.join(os.path.sep, 'etc', f'{ini_name}.ini'),
+        os.path.join(os.path.sep, 'etc', f'{ini_name}', f'{ini_name}.ini'),
         ]
 
     # first pass at parsing args to get additional ini files
