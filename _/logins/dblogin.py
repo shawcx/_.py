@@ -224,4 +224,4 @@ class DBLoginRecords(_.handlers.Protected):
         if callback is None:
             callback = getattr(_.application, 'on_dblogin_delete', None)
         if callback:
-            await _.wait(callback(self, self._component, username))
+            await _.wait(callback(self._component, username))
