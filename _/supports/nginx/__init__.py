@@ -15,6 +15,7 @@ import _
 class Nginx(_.supports.Support):
     async def init(self, component_name, **kwds):
         self.params = dict(
+            root        = _.paths(),
             ns          = _.ns,
             name        = _.name,
             web_root    = '/var/www/html',
