@@ -1,15 +1,12 @@
 #
-# (c) 2015-2023 Matthew Shaw
+# (c) 2015-2024 Matthew Shaw
 #
 # Authors
 # =======
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
-import dataclasses
-import logging
-import os
-import sys
+import types
 import typing
 
 import sqlalchemy
@@ -33,23 +30,28 @@ class Protobuf(_.records.Record):
         await super().init(module, database)
 
     def load(self, module):
-        self.module_name = module.__name__
         try:
             self._options = getattr(module, f'{self._options}_pb2')
             no_table = getattr(self._options, 'no_table')
         except AttributeError:
             raise _.error('Cannot find protobuf module "%s"', f'{self._options}_pb2')
 
-        for member in dir(module):
-            # all proto messages end with _pb2
-            if not member.endswith('_pb2'):
-                continue
+        self.load_module(module)
+
+    def load_module(self, module):
+        for member_name in dir(module):
             # get a handle to the pb2 module descriptor
-            pb2 = getattr(module, member)
+            member = getattr(module, member_name)
+
+            # all proto messages end with _pb2
+            if not member_name.endswith('_pb2'):
+                if isinstance(member, types.ModuleType):
+                    self.load_module(member)
+                continue
 
             # iterate over all the message definitions
-            for name,descriptor in pb2.DESCRIPTOR.message_types_by_name.items():
-                message = getattr(pb2, name)
+            for name,descriptor in member.DESCRIPTOR.message_types_by_name.items():
+                message = getattr(member, name)
                 options = message.DESCRIPTOR.GetOptions()
 
                 if self.db and not options.Extensions[self._options.no_table]:
@@ -60,14 +62,14 @@ class Protobuf(_.records.Record):
                 self._container[name] = record_type
 
                 if not options.Extensions[self._options.no_handler]:
-                    self._proto_handler(name, record_type)
+                    self._proto_handler(name, record_type, module.__name__)
 
-    def _proto_handler(self, name, record_type):
+    def _proto_handler(self, name, record_type, module_name):
         members = {
             'component' : name,
             'db'        : self.db,
             'record'    : record_type,
-            '_module__' : self.module_name,
+            '_module__' : module_name,
         }
         ## check if a custom handler was defined
         proto_handler = self._container._handlers.get(name)
