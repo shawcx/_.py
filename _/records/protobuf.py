@@ -32,13 +32,13 @@ class Protobuf(_.records.Record):
     def load(self, module):
         try:
             self._options = getattr(module, f'{self._options}_pb2')
-            no_table = getattr(self._options, 'no_table')
         except AttributeError:
             raise _.error('Cannot find protobuf module "%s"', f'{self._options}_pb2')
-
         self.load_module(module)
+        del self._module_name
 
     def load_module(self, module):
+        self._module_name = module.__name__
         for member_name in dir(module):
             # get a handle to the pb2 module descriptor
             member = getattr(module, member_name)
@@ -46,11 +46,15 @@ class Protobuf(_.records.Record):
             # all proto messages end with _pb2
             if not member_name.endswith('_pb2'):
                 if isinstance(member, types.ModuleType):
+                    self._container[member_name] = ProtobufContainer()
+                    parent = (self._container,self._module_name)
+                    self._container = self._container[member_name]
                     self.load_module(member)
+                    (self._container,self._module_name) = parent
                 continue
 
             # iterate over all the message definitions
-            for name,descriptor in member.DESCRIPTOR.message_types_by_name.items():
+            for name in member.DESCRIPTOR.message_types_by_name:
                 message = getattr(member, name)
                 options = message.DESCRIPTOR.GetOptions()
 
@@ -89,6 +93,7 @@ class Protobuf(_.records.Record):
         members = {
             '__tablename__'   : name,
             '__annotations__' : annotations,
+            '__module__'      : self._module_name,
             }
 
         if message:
