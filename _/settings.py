@@ -26,6 +26,7 @@ class ArgParser(argparse.ArgumentParser):
             self._print_message(message, sys.stderr)
         _.application.stop()
 
+
 _.argparser = ArgParser(add_help=False)
 
 _.argparser.add_argument('--ini', '-I',
@@ -56,12 +57,7 @@ async def load(**kwds):
     except OSError:
         caller = '.'
 
-    # get the directory of the script
-    root = kwds.get('root', None)
-    if root is None:
-        root = os.path.dirname(caller)
-    root = os.path.abspath(root)
-
+    # allow apps to define a name or derive from caller
     _.name = kwds.get('name', None)
     if _.name is None:
         # get the name of the script
@@ -69,28 +65,40 @@ async def load(**kwds):
         if _.name.endswith('.py'):
             _.name = _.name[:-3]
 
+    # allow apps to define a namespace
     _.ns = kwds.get('ns', _.name)
     if _.ns is None:
         _.ns = ''
+
+    # get the directory of the script
+    root = kwds.get('root', None)
+    if root is None:
+        root = os.path.dirname(caller)
+    root = os.path.abspath(root)
 
     _.paths = _.Paths(root=root, ns=_.ns)
 
     # if ns is not passed in use the supplied or derived ns
     ini_name = _.name or _.ns
+    ini_dir  = _.ns or _.name
 
+    # allow several locations for ini files
     ini_files = [
         _.paths(f'{ini_name}.ini'),
         _.paths(f'{ini_name}.ini.local'),
-        os.path.join(os.path.sep, 'etc', f'{ini_name}', f'{ini_name}.ini'),
+        os.path.join(os.path.sep, 'etc', f'{ini_dir}', f'{ini_name}.ini'),
+        os.path.join(os.path.expanduser('~'), f'.{ini_name}.ini'),
         ]
 
     # first pass at parsing args to get additional ini files
     _.args,remainder = _.argparser.parse_known_args()
 
+    # append a custom ini file if specified
     if _.args.ini:
         ini_files.append(_.args.ini)
 
-    _.args.debug = '--debug' in remainder
+    # little hack because I like the generic options at the bottom of the help message
+    _.args.debug = '--debug' in remainder or '-D' in remainder
     logging.basicConfig(
         format  = '%(asctime)s %(levelname)-8s %(message)s',
         datefmt = '%Y-%m-%d %H:%M:%S',
@@ -98,11 +106,11 @@ async def load(**kwds):
         force   = True
         )
 
-    if _.args.debug:
-        for ini_file in ini_files:
-            logging.debug('Loading ini file: %s', ini_file)
-
+    # load the ini files, at least one file must exist
     try:
+        if _.args.debug:
+            for ini_file in ini_files:
+                logging.debug('Loading ini file: %s', ini_file)
         ok = _.config.read(ini_files)
     except configparser.ParsingError as e:
         raise _.error('Unable to parse file: %s', e)
@@ -110,6 +118,7 @@ async def load(**kwds):
     if not ok:
         logging.warning('Unable to read config file(s):\n  %s', '\n  '.join(ini_files))
 
+    # load the components specified in the ini file
     try:
         await _.components.load('databases')
         await _.components.load('records')
@@ -121,6 +130,7 @@ async def load(**kwds):
         _.application.stop()
         return
 
+    # add the generic arguments after any components
     _.argparser.add_argument('--debug', '-D',
         action='store_true',
         help='Log verbose debugging information')
@@ -135,12 +145,6 @@ async def load(**kwds):
         help='Show help message')
 
     _.args = _.argparser.parse_args()
-
-    if not _.args.address:
-        _.args.address = _.config.get(_.name, 'address', fallback='127.0.0.1')
-
-    if not _.args.port:
-        _.args.port = _.config.getint(_.name, 'port', fallback=8080)
 
     try:
         for name,component in _.supports.items():

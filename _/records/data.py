@@ -55,24 +55,6 @@ class Data(_.records.Record):
             if not hasattr(cls, f'_{name}__no_handler'):
                 self._data_handler(name, record_type)
 
-    def _data_handler(self, name, record_type):
-        members = {
-            'component' : name,
-            'db'        : self.db,
-            'record'    : record_type,
-            '_module__' : self.module_name,
-        }
-
-        data_handler = self._container._handlers.get(name)
-        if data_handler:
-            name = data_handler.__name__
-
-        types = [data_handler] if data_handler else [_.records.HandlerInterface]
-        types.append(tornado.web.RequestHandler)
-
-        record_handler = type(name, tuple(types), _.prefix(members))
-        _.application._record_handler(self.component_name, record_handler)
-
     def _data_table(self, name, cls, parent=None, parent_key=None, parent_col=None):
         child_tables = {}
         annotations = {}
@@ -152,6 +134,23 @@ class Data(_.records.Record):
 
         return table_type
 
+    def _data_handler(self, name, record_type):
+        data_handler = self._container._handlers.get(name)
+        if data_handler:
+            name = data_handler.__name__
+
+        types = [data_handler] if data_handler else [_.records.HandlerInterface]
+        types.append(tornado.web.RequestHandler)
+
+        record_handler = type(name, tuple(types), {
+            '_component' : name,
+            '_db'        : self.db,
+            '_record'    : record_type,
+            '__module__' : self.module_name,
+            })
+        
+        _.application._record_handler(self.component_name, record_handler)
+
 
 class DataInterface(_.records.RecordsInterface):
     @staticmethod
@@ -202,7 +201,7 @@ class DataContainer(_.Container):
 
     @staticmethod
     def dump(obj):
-        return Interface.dump(obj)
+        return DataInterface.dump(obj)
 
     @staticmethod
     def no_table(cls):

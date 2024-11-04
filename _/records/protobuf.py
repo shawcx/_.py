@@ -6,6 +6,7 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import logging
 import types
 import typing
 
@@ -23,8 +24,8 @@ class Protobuf(_.records.Record):
         if hasattr(_, self.component_name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
         if options is None:
-            raise _.error('Protobuf modules require options to be specified')
-        self._options = options
+            logging.debug('Using Protobuf_pb2 for options')
+        self._options = options or 'Protobuf'
         self._container = ProtobufContainer()
         setattr(_, self.component_name, self._container)
         await super().init(module, database)
@@ -45,12 +46,13 @@ class Protobuf(_.records.Record):
 
             # all proto messages end with _pb2
             if not member_name.endswith('_pb2'):
+                # load submodules for nested protobufs
                 if isinstance(member, types.ModuleType):
                     self._container[member_name] = ProtobufContainer()
-                    parent = (self._container,self._module_name)
+                    stash = (self._container,self._module_name)
                     self._container = self._container[member_name]
                     self.load_module(member)
-                    (self._container,self._module_name) = parent
+                    (self._container,self._module_name) = stash
                 continue
 
             # iterate over all the message definitions
@@ -67,24 +69,6 @@ class Protobuf(_.records.Record):
 
                 if not options.Extensions[self._options.no_handler]:
                     self._proto_handler(name, record_type, module.__name__)
-
-    def _proto_handler(self, name, record_type, module_name):
-        members = {
-            'component' : name,
-            'db'        : self.db,
-            'record'    : record_type,
-            '_module__' : module_name,
-        }
-        ## check if a custom handler was defined
-        proto_handler = self._container._handlers.get(name)
-        if proto_handler:
-            name = proto_handler.__name__
-
-        types = [proto_handler] if proto_handler else [_.records.HandlerInterface]
-        types.append(tornado.web.RequestHandler)
-
-        record_handler = type(name, tuple(types), _.prefix(members))
-        _.application._record_handler(self.component_name, record_handler)
 
     def _proto_table(self, name, message=None, descriptor=None, parent=None, parent_key=None, parent_col=None):
         child_tables = {}
@@ -202,6 +186,24 @@ class Protobuf(_.records.Record):
             setattr(table_type, f'_{field.name}', child_type)
 
         return table_type
+
+    def _proto_handler(self, name, record_type, module_name):
+        ## check if a custom handler was defined
+        proto_handler = self._container._handlers.get(name)
+        if proto_handler:
+            name = proto_handler.__name__
+
+        types = [proto_handler] if proto_handler else [_.records.HandlerInterface]
+        types.append(tornado.web.RequestHandler)
+
+        record_handler = type(name, tuple(types), {
+            '_component' : name,
+            '_db'        : self.db,
+            '_record'    : record_type,
+            '__module__' : module_name,
+            })
+
+        _.application._record_handler(self.component_name, record_handler)
 
     # TODO: try mapping to sqlalchemy.types
     _proto_field_mapping = [
