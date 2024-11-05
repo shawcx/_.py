@@ -98,6 +98,13 @@ class Application:
             root_logger = logging.getLogger()
             root_logger.addHandler(file_logger)
 
+    async def sleep(self, _timeout):
+        try:
+            await asyncio.wait_for(self._stop_event.wait(), timeout=_timeout)
+        except asyncio.TimeoutError:
+            return True
+        return False
+
     def task(self, fn, *args, **kwds):
         async def _task():
             await _.wait(fn(*args, **kwds))
@@ -112,10 +119,10 @@ class Application:
                 try:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=_timeout)
                     break
-                except asyncio.TimeoutError as e:
+                except asyncio.TimeoutError:
                     pass
                 try:
-                    result = await _.wait(fn(*args, **kwds))
+                    await _.wait(fn(*args, **kwds))
                 except Exception as e:
                     logging.exception(e)
         return asyncio.create_task(_periodic())
@@ -149,6 +156,16 @@ class Service(Application, tornado.web.Application):
         self._login_patterns   = []
         self.patterns = []
         self.settings = {}
+
+        _.argparser.add_argument('--address', '-a',
+            metavar='<address>',
+            help = 'Interface to bind to')
+
+        _.argparser.add_argument('--port', '-p',
+            metavar='<port>',
+            type=int,
+            help='Port to listen on')
+
         await super(Service, self)._async_main(ns)
 
     async def _async_init(self, **kwds):
@@ -163,15 +180,14 @@ class Service(Application, tornado.web.Application):
         self.settings['static_path']   = _.paths('static')
         self.settings['template_path'] = _.paths('templates')
         self.settings['debug']         = _.args.debug
+        if 'cookie_secret' not in self.settings:
+            self.settings['cookie_secret'] = await self.cookie_secret()
 
         # call the underscore application's entry point
         try:
             await _.wait(self.initialize())
         except NotImplementedError:
             logging.warning('No "initialize" function defined')
-
-        if 'cookie_secret' not in self.settings:
-            self.settings['cookie_secret'] = await self.cookie_secret()
 
         patterns = list(self._records_patterns)
 

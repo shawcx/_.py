@@ -23,10 +23,13 @@ class Protobuf(_.records.Record):
         # setup the container beforehand so the data module can use data decorators
         if hasattr(_, self.component_name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
+        # options come from Protobuf.proto but need to be compiled in-line to avoid headaches
         if options is None:
             logging.debug('Using Protobuf_pb2 for options')
         self._options = options or 'Protobuf'
+        # container class for derived Python types
         self._container = ProtobufContainer()
+        # access the types via the name or alias of the component
         setattr(_, self.component_name, self._container)
         await super().init(module, database)
 
@@ -98,13 +101,18 @@ class Protobuf(_.records.Record):
                     raise _.error('Only one primary key can be specified')
                 primary_key = field.name
 
+            # get the scalar type of the field or dict if message
             column_type = Protobuf._proto_field_mapping[field.type]
             if column_type is dict:
                 if is_primary_key:
                     raise _.error('Message type cannot be primary key')
 
-                ref_table_name = f'{name}_{field.name}'
-                column_type = ref_table_name
+                if True: # JSON
+                    column_type = 'JSON'
+                else:
+                    ref_table_name = f'{name}_{field.name}'
+                    column_type = ref_table_name
+
                 if field.label is field.LABEL_REPEATED:
                     column_type = typing.List[column_type]
                 else:
@@ -113,14 +121,21 @@ class Protobuf(_.records.Record):
 
                 annotations[field.name] = column_type
 
-                members[field.name] = sqlalchemy.orm.relationship(
-                    back_populates=name,
-                    lazy='joined',
-                    cascade="all, delete-orphan",
-                    init=False,
-                    )
-
-                child_tables[ref_table_name] = field
+                if True: # JSON
+                    members[field.name] = sqlalchemy.orm.mapped_column(
+                        column_type,
+                        primary_key=is_primary_key,
+                        unique=unique,
+                        init=False,
+                        )
+                else:
+                    members[field.name] = sqlalchemy.orm.relationship(
+                        back_populates=name,
+                        lazy='joined',
+                        cascade="all, delete-orphan",
+                        init=False,
+                        )
+                    child_tables[ref_table_name] = field
             else:
                 explicit_type = None
                 # support repeated field types

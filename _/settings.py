@@ -33,16 +33,6 @@ _.argparser.add_argument('--ini', '-I',
     metavar='<path>',
     help='Specify additional ini file')
 
-_.argparser.add_argument('--address', '-a',
-    metavar='<address>',
-    help = 'Interface to bind to')
-
-_.argparser.add_argument('--port', '-p',
-    metavar='<port>',
-    type=int,
-    help='Port to listen on')
-
-
 _.config = configparser.ConfigParser(
     allow_no_value = True,
     interpolation  = None,
