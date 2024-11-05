@@ -23,15 +23,32 @@ class Protobuf(_.records.Record):
         # setup the container beforehand so the data module can use data decorators
         if hasattr(_, self.component_name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
+
         # options come from Protobuf.proto but need to be compiled in-line to avoid headaches
         if options is None:
             logging.debug('Using Protobuf_pb2 for options')
+
         self._options = options or 'Protobuf'
+
         # container class for derived Python types
-        self._container = ProtobufContainer()
+        self._container = _.Container()
+
         # access the types via the name or alias of the component
         setattr(_, self.component_name, self._container)
+
+        try:
+            _.argparser.add_argument(f'--proto',
+                metavar='<server_name>', default=0, nargs='?',
+                help='install nginx config'
+                )
+        except:
+            raise _.error('Multiple nginx supports detected: %s', component_name) from None
+
         await super().init(module, database)
+
+    @classmethod
+    async def args(cls, component_name):
+        print('@@@', cls, component_name)
 
     def load(self, module):
         try:
@@ -51,7 +68,7 @@ class Protobuf(_.records.Record):
             if not member_name.endswith('_pb2'):
                 # load submodules for nested protobufs
                 if isinstance(member, types.ModuleType):
-                    self._container[member_name] = ProtobufContainer()
+                    self._container[member_name] = _.Container()
                     stash = (self._container,self._module_name)
                     self._container = self._container[member_name]
                     self.load_module(member)
@@ -101,29 +118,31 @@ class Protobuf(_.records.Record):
                     raise _.error('Only one primary key can be specified')
                 primary_key = field.name
 
+            # check if column should be unique
+            unique = col_options.Extensions[self._options.uniq]
+
             # get the scalar type of the field or dict if message
             column_type = Protobuf._proto_field_mapping[field.type]
             if column_type is dict:
                 if is_primary_key:
                     raise _.error('Message type cannot be primary key')
 
-                if True: # JSON
-                    column_type = 'JSON'
+                if False: # JSON
+                    column_type = dict[str, typing.Any]
                 else:
                     ref_table_name = f'{name}_{field.name}'
                     column_type = ref_table_name
 
                 if field.label is field.LABEL_REPEATED:
-                    column_type = typing.List[column_type]
-                else:
-                    column_type = typing.Optional[column_type]
-                column_type = sqlalchemy.orm.Mapped[column_type]
+                    column_type = list[column_type]
+
+                column_type = sqlalchemy.orm.Mapped[typing.Optional[column_type]]
 
                 annotations[field.name] = column_type
 
-                if True: # JSON
+                if False: # JSON
                     members[field.name] = sqlalchemy.orm.mapped_column(
-                        column_type,
+                        None,
                         primary_key=is_primary_key,
                         unique=unique,
                         init=False,
@@ -142,11 +161,9 @@ class Protobuf(_.records.Record):
                 if field.label is field.LABEL_REPEATED:
                     if column_type is str:
                         explicit_type = sqlalchemy.ARRAY(sqlalchemy.TEXT)
-                    column_type = typing.List[column_type]
-                column_type = sqlalchemy.orm.Mapped[column_type]
+                    column_type = list[column_type]
 
-                # check if column should be unique
-                unique = col_options.Extensions[self._options.uniq]
+                column_type = sqlalchemy.orm.Mapped[typing.Optional[column_type]]
 
                 # check for foreign key
                 if col_options.HasExtension(self._options.ref):
@@ -194,7 +211,7 @@ class Protobuf(_.records.Record):
 
         members['__primary_key__'] = primary_key
 
-        table_type = type(name, (ProtoInterface,_.databases.Base,), members)
+        table_type = type(name, (ProtoInterface,self.db.Base,), members)
 
         for child_table,field in child_tables.items():
             child_type = self._proto_table(child_table, descriptor=field.message_type, parent=name, parent_key=primary_key, parent_col=field.name)
@@ -204,10 +221,10 @@ class Protobuf(_.records.Record):
 
     def _proto_handler(self, name, record_type, module_name):
         ## check if a custom handler was defined
-        proto_handler = self._container._handlers.get(name)
+        proto_handler = _handlers.get(name)
         if proto_handler:
             name = proto_handler.__name__
-
+            module_name = proto_handler.__module__
         types = [proto_handler] if proto_handler else [_.records.HandlerInterface]
         types.append(tornado.web.RequestHandler)
 
@@ -249,7 +266,7 @@ class ProtoInterface(_.records.RecordsInterface):
     def __descriptor(cls, descriptor, msg, dst):
         for field in descriptor.fields:
             if field.type is field.TYPE_MESSAGE:
-                child_cls = getattr(cls, f'_{field.name}')
+                child_cls = getattr(cls, f'{field.name}')
                 if field.label == field.LABEL_REPEATED:
                     dst_list = getattr(dst, field.name)
                     for item in getattr(msg, field.name):
@@ -299,8 +316,9 @@ class ProtoInterface(_.records.RecordsInterface):
     def _from_pb(cls, packed):
         pb = cls.__pb()
         pb.ParseFromString(packed)
+        msg = google.protobuf.json_format.MessageToJson(pb)
         self = cls()
-        self.__descriptor(cls, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(cls, pb.DESCRIPTOR, msg, self)
         return self
 
     def _as_pb(self):
@@ -311,15 +329,25 @@ class ProtoInterface(_.records.RecordsInterface):
             raise _.error('%s', e) from None
         return pb.SerializeToString()
 
+_handlers = {}
+def handle(_message):
+    def wrap(_handler):
+        _handlers[_message.DESCRIPTOR.name] = _handler
+        return _handler
+    return wrap
 
-class ProtobufContainer(_.Container):
-    def __init__(self):
-        super().__init__()
-        self._handlers = {}
+#class ProtobufContainer(_.Container):
+#    _handlers = {}
+#
+#    # decorator for adding custom handlers for message types
+#    def handles(self, _message):
+#        def wrap(_handler):
+#            self._handlers[_message.DESCRIPTOR.name] = _handler
+#            return _handler
+#        return wrap
 
-    # decorator for adding custom handlers for message types
-    def handles(self, _message):
-        def wrap(_handler):
-            self._handlers[_message.DESCRIPTOR.name] = _handler
-            return _handler
-        return wrap
+if '__main__' == __name__:
+    import os
+    path = os.path.join(os.path.dirname(__file__), 'Protobuf.proto')
+    protobuf = open(path, 'r').read()
+    print(protobuf)

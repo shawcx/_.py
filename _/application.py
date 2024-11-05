@@ -45,15 +45,6 @@ class Application:
             self.stop()
 
         if not self._stop_event.is_set():
-            for name,component in _.logins.items():
-                try:
-                    await _.wait(component.args(name))
-                except _.error as e:
-                    logging.error('%s', e)
-                    self.stop()
-                    break
-
-        if not self._stop_event.is_set():
             try:
                 await self._async_init()
             except _.error as e:
@@ -150,7 +141,7 @@ class Application:
         print()
 
 
-class Service(Application, tornado.web.Application):
+class WebApplication(Application, tornado.web.Application):
     async def _async_main(self, ns):
         self._records_patterns = []
         self._login_patterns   = []
@@ -166,7 +157,7 @@ class Service(Application, tornado.web.Application):
             type=int,
             help='Port to listen on')
 
-        await super(Service, self)._async_main(ns)
+        await super(WebApplication, self)._async_main(ns)
 
     async def _async_init(self, **kwds):
         _.sessions = _.config.get(_.name, 'sessions', fallback=None)

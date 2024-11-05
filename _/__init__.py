@@ -17,7 +17,7 @@ from . import auth
 from . import handlers
 from . import components
 
-from .application import Application,Service
+from .application import Application,WebApplication
 
 
 class error(Exception):

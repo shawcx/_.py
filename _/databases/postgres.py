@@ -7,7 +7,7 @@
 #
 
 import logging
-import re
+import typing
 
 import _
 
@@ -20,6 +20,7 @@ import sqlalchemy
 import sqlalchemy.dialects.postgresql
 
 
+
 class Postgres(_.databases.Database):
     DRIVER = 'postgresql+asyncpg'
 
@@ -28,5 +29,15 @@ class Postgres(_.databases.Database):
     BYTES  = sqlalchemy.dialects.postgresql.BYTEA
     UUID   = sqlalchemy.dialects.postgresql.UUID
 
-    async def init(self, component_name, **kwds):
-        await super(Postgres, self).init(component_name, **kwds)
+    class Base(
+            sqlalchemy.ext.asyncio.AsyncAttrs,
+            sqlalchemy.orm.MappedAsDataclass,
+            sqlalchemy.orm.DeclarativeBase,
+            ):
+        'base class for _.records'
+
+        type_annotation_map = {
+            int:                         sqlalchemy.BIGINT,
+            dict[str, typing.Any]:       sqlalchemy.dialects.postgresql.JSONB,
+            list[dict[str, typing.Any]]: sqlalchemy.dialects.postgresql.JSONB,
+            }

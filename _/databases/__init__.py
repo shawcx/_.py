@@ -7,11 +7,13 @@
 #
 
 import logging
+import typing
 
 import _
 
 try:
     import sqlalchemy
+    import sqlalchemy.types
     import sqlalchemy.orm
     from sqlalchemy.ext.asyncio import AsyncSession,create_async_engine
 except ImportError:
@@ -22,7 +24,7 @@ class Database:
     TEXT    = sqlalchemy.TEXT
     INTEGER = sqlalchemy.INTEGER
     BIGINT  = sqlalchemy.BIGINT
-    DOUBLE  = sqlalchemy.DOUBLE_PRECISION
+    #DOUBLE  = sqlalchemy.DOUBLE_PRECISION
     NUMERIC = sqlalchemy.NUMERIC
     REAL    = sqlalchemy.REAL
     BOOLEAN = sqlalchemy.BOOLEAN
@@ -48,7 +50,7 @@ class Database:
     async def create_tables(self):
         try:
             async with self.engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
+                await conn.run_sync(self.Base.metadata.create_all)
                 await conn.commit()
         except Exception as e:
             raise _.error('Database "%s": %s', self.component_name, e) from None
@@ -102,14 +104,3 @@ class Database:
                     statement = sqlalchemy.delete(obj).where(column == value)
                     results = await session.execute(statement)
                     return results.rowcount
-
-class Base(
-        sqlalchemy.ext.asyncio.AsyncAttrs,
-        sqlalchemy.orm.MappedAsDataclass,
-        sqlalchemy.orm.DeclarativeBase,
-        ):
-    'base class for _.records'
-
-    type_annotation_map = {
-        int: sqlalchemy.BIGINT,
-    }

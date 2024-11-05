@@ -7,6 +7,7 @@
 #
 
 import logging
+import typing
 import uuid
 
 import _
@@ -50,6 +51,13 @@ class UUID(sqlalchemy.types.TypeDecorator):
         return value
 
 
+@sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, 'connect')
+def set_sqlite_pragma(conn, record):
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+
 class SQLite(_.databases.Database):
     DRIVER = 'sqlite+aiosqlite'
 
@@ -59,13 +67,19 @@ class SQLite(_.databases.Database):
     BOOL   = sqlalchemy.dialects.sqlite.BOOLEAN
     UUID   = UUID
 
+    class Base(
+            sqlalchemy.ext.asyncio.AsyncAttrs,
+            sqlalchemy.orm.MappedAsDataclass,
+            sqlalchemy.orm.DeclarativeBase,
+            ):
+        'base class for _.records'
+
+        type_annotation_map = {
+            int:                         sqlalchemy.BIGINT,
+            dict[str, typing.Any]:       sqlalchemy.dialects.sqlite.JSON,
+            list[dict[str, typing.Any]]: sqlalchemy.dialects.sqlite.JSON,
+            }
+
     async def init(self, component_name, **kwds):
-        await super(SQLite, self).init(component_name, **kwds)
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)
-
-
-@sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, 'connect')
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+        await super(SQLite, self).init(component_name, **kwds)

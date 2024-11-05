@@ -137,8 +137,17 @@ async def load(**kwds):
     _.args = _.argparser.parse_args()
 
     try:
+        for name,component in _.records.items():
+            if not _.application._stop_event.is_set():
+                await _.wait(component.args(name))
+
         for name,component in _.supports.items():
-            await _.wait(component.args(name))
+            if not _.application._stop_event.is_set():
+                await _.wait(component.args(name))
+
+        for name,component in _.logins.items():
+            if not _.application._stop_event.is_set():
+                await _.wait(component.args(name))
     except _.error as e:
         logging.error('%s', e)
         _.application.stop()

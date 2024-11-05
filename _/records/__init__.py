@@ -25,11 +25,11 @@ class Record:
     async def _(cls, component_name, **kwds):
         self = cls()
         self.component_name = component_name
+        _.records[component_name] = self
         try:
             await self.init(**kwds)
         except TypeError as e:
             raise _.error('%s', e)
-        _.records[component_name] = self
 
     async def init(self, module, database=None):
         try:
@@ -43,6 +43,10 @@ class Record:
 
         if self.db:
             await self.db.create_tables()
+
+    @classmethod
+    async def args(cls, component_name):
+        pass
 
     def load(self, module):
         raise NotImplementedError
@@ -103,21 +107,22 @@ class HandlerInterface(_.handlers.Protected):
         else:
             self.data = None
 
-    @_.auth.protected
+    #@_.auth.protected
     async def get(self, record_id):
         if not record_id:
             records = await self._db.find(self._record)
             self.write(dict(data=[r._as_dict() for r in records]))
         else:
+            record_id = int(record_id)
             record = await self._db.find_one(self._record, record_id)
             if record is None:
                 raise _.HTTPError(404)
             self.write(record._as_dict())
 
-    @_.auth.protected
+    #@_.auth.protected
     async def post(self, record_id, record=None):
         if record is None:
-            record = self._record._from_dict(self.data)
+            record = self._record._from_pb(self.request.body)
         try:
             await self._db.insert(record)
         except _.error as e:
@@ -125,7 +130,7 @@ class HandlerInterface(_.handlers.Protected):
         self.set_status(204)
         #self.write(record._as_dict())
 
-    @_.auth.protected
+    #@_.auth.protected
     async def put(self, record_id, record=None):
         if record is None:
             record = self._record._from_dict(self.data)
@@ -136,7 +141,7 @@ class HandlerInterface(_.handlers.Protected):
         self.set_status(204)
         #self.write(record._as_dict())
 
-    @_.auth.protected
+    #@_.auth.protected
     async def delete(self, record_id):
         if record_id is None:
             raise _.HTTPError(500)
