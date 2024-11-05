@@ -1,4 +1,5 @@
 /skeleton/static
+/build
 *.db
 *.local
 *.pyc

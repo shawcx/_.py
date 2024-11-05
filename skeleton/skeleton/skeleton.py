@@ -15,7 +15,7 @@ _.auth.protected = _.auth.filter_user(lambda current_user: current_user)
 
 import sqlalchemy
 
-class Skeleton(_.Application):
+class Skeleton(_.WebApplication):
     async def initialize(self):
         self.websockets = {}
 
