@@ -37,7 +37,7 @@ class DbCache(_.caches.Cache):
                 raise _.error('dbcache requires a database to be specified')
         self.db = _.databases[database]
 
-        self.config_table = type(self._config, (_.records.RecordsInterface,_.databases.Base,), {
+        self.config_table = type(self._config, (_.records.RecordsInterface,self.db.Base,), {
             '__tablename__'   : self._config,
             '__annotations__' : {
                 self._key_col : str,
@@ -64,7 +64,7 @@ class DbCache(_.caches.Cache):
             annotations[col] = typing.Optional[__builtins__.get(dbtype)]
             columns[col] = sqlalchemy.orm.mapped_column(init=False)
 
-        self.session_table = type(self._table, (_.records.RecordsInterface, _.databases.Base,), columns)
+        self.session_table = type(self._table, (_.records.RecordsInterface, self.db.Base,), columns)
 
         await self.db.create_tables()
 
