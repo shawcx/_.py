@@ -67,6 +67,8 @@ current_user = filter_user(lambda current_user: True)
 # control over access to component handlers
 protected    = filter_user(lambda current_user: True)
 
+# default record access is unprotected
+records = lambda fn: fn
 
 # implement old school user/name password prompt
 # useful for command-line tools to pass as part of the URL

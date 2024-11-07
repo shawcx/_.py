@@ -7,6 +7,7 @@
 #
 
 import logging
+import configparser
 import types
 import typing
 
@@ -19,16 +20,13 @@ import _
 
 
 class Protobuf(_.records.Record):
-    async def init(self, module, database=None, options=None):
+    async def init(self, module, **kwds):
         # setup the container beforehand so the data module can use data decorators
         if hasattr(_, self.component_name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
 
         # options come from Protobuf.proto but need to be compiled in-line to avoid headaches
-        if options is None:
-            logging.debug('Using Protobuf_pb2 for options')
-
-        self._options = options or 'Protobuf'
+        self._options_name = f"{kwds.get('options', 'Protobuf')}_pb2"
 
         # container class for derived Python types
         self._container = _.Container()
@@ -37,30 +35,36 @@ class Protobuf(_.records.Record):
         setattr(_, self.component_name, self._container)
 
         try:
-            _.argparser.add_argument(f'--proto',
-                metavar='<server_name>', default=0, nargs='?',
-                help='install nginx config'
-                )
-        except:
-            raise _.error('Multiple nginx supports detected: %s', component_name) from None
+            self.relational = _.config.getboolean(self.component_name, 'relational')
+        except configparser.NoOptionError:
+            self.relational = False
 
-        await super().init(module, database)
+        try:
+            self.handlers = _.config.getboolean(self.component_name, 'handlers')
+        except configparser.NoOptionError:
+            self.handlers = True
+
+        await super().init(module, kwds.get('database',None))
 
     @classmethod
     async def args(cls, component_name):
-        print('@@@', cls, component_name)
+        pass
 
     def load(self, module):
         try:
-            self._options = getattr(module, f'{self._options}_pb2')
+            self._options = getattr(module, self._options_name)
         except AttributeError:
-            raise _.error('Cannot find protobuf module "%s"', f'{self._options}_pb2')
+            raise _.error('Cannot find protobuf module "%s"', self._options_name)
         self.load_module(module)
         del self._module_name
 
     def load_module(self, module):
         self._module_name = module.__name__
         for member_name in dir(module):
+            # ignore the options file
+            if member_name == self._options_name:
+                continue
+
             # get a handle to the pb2 module descriptor
             member = getattr(module, member_name)
 
@@ -87,7 +91,7 @@ class Protobuf(_.records.Record):
 
                 self._container[name] = record_type
 
-                if not options.Extensions[self._options.no_handler]:
+                if self.handlers and not options.Extensions[self._options.no_handler]:
                     self._proto_handler(name, record_type, module.__name__)
 
     def _proto_table(self, name, message=None, descriptor=None, parent=None, parent_key=None, parent_col=None):
@@ -127,9 +131,9 @@ class Protobuf(_.records.Record):
                 if is_primary_key:
                     raise _.error('Message type cannot be primary key')
 
-                if False: # JSON
+                if not self.relational: # JSON
                     column_type = dict[str, typing.Any]
-                else:
+                else: # flat tables
                     ref_table_name = f'{name}_{field.name}'
                     column_type = ref_table_name
 
@@ -140,7 +144,7 @@ class Protobuf(_.records.Record):
 
                 annotations[field.name] = column_type
 
-                if False: # JSON
+                if not self.relational: # JSON
                     members[field.name] = sqlalchemy.orm.mapped_column(
                         None,
                         primary_key=is_primary_key,

@@ -107,7 +107,7 @@ class HandlerInterface(_.handlers.Protected):
         else:
             self.data = None
 
-    #@_.auth.protected
+    @_.auth.records
     async def get(self, record_id):
         if not record_id:
             records = await self._db.find(self._record)
@@ -119,7 +119,7 @@ class HandlerInterface(_.handlers.Protected):
                 raise _.HTTPError(404)
             self.write(record._as_dict())
 
-    #@_.auth.protected
+    @_.auth.records
     async def post(self, record_id, record=None):
         if record is None:
             record = self._record._from_pb(self.request.body)
@@ -130,7 +130,7 @@ class HandlerInterface(_.handlers.Protected):
         self.set_status(204)
         #self.write(record._as_dict())
 
-    #@_.auth.protected
+    @_.auth.records
     async def put(self, record_id, record=None):
         if record is None:
             record = self._record._from_dict(self.data)
@@ -141,7 +141,7 @@ class HandlerInterface(_.handlers.Protected):
         self.set_status(204)
         #self.write(record._as_dict())
 
-    #@_.auth.protected
+    @_.auth.records
     async def delete(self, record_id):
         if record_id is None:
             raise _.HTTPError(500)

@@ -44,7 +44,7 @@ async def load(**kwds):
     # get the path of the caller
     try:
         caller = inspect.getfile(_.application.__class__)
-    except OSError:
+    except (TypeError,OSError):
         caller = '.'
 
     # allow apps to define a name or derive from caller

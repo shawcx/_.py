@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "google/protobuf/descriptor.proto";
 
+
 extend google.protobuf.MessageOptions {
     string id         = 50001;
     bool   no_table   = 50002;
@@ -11,9 +12,10 @@ extend google.protobuf.MessageOptions {
 
 extend google.protobuf.FieldOptions {
     bool   pkey       = 50001;
-    bool   uniq       = 50002;
-    bool   required   = 50003;
-    string ref        = 50004;
-    string paired     = 50005;
-    string subtype    = 50006;
+    bool   no_column  = 50002;
+    bool   uniq       = 50003;
+    bool   required   = 50004;
+    string ref        = 50005;
+    string paired     = 50006;
+    string subtype    = 50007;
 }
