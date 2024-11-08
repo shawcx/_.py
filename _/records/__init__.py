@@ -31,12 +31,13 @@ class Record:
         except TypeError as e:
             raise _.error('%s', e)
 
-    async def init(self, module, database=None):
+    async def init(self, module, **kwds):
         try:
             imported = importlib.import_module(module)
         except ModuleNotFoundError as e:
             raise _.error('Unknown module: %s: %s', module, e)
 
+        database = kwds.get('database', None)
         self.db = _.databases[database] if database else None
 
         await _.wait(self.load(imported))

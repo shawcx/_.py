@@ -14,13 +14,13 @@ import _
 
 
 class Data(_.records.Record):
-    async def init(self, module, database=None):
+    async def init(self, module, **kwds):
         # setup the container beforehand so the data module can use data decorators
         if hasattr(_, self.component_name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
         self._container = DataContainer()
         setattr(_, self.component_name, self._container)
-        await super().init(module, database)
+        await super().init(module, **kwds)
 
     def load(self, module):
         self.module_name = module.__name__

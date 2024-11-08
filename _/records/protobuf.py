@@ -6,8 +6,9 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
-import logging
 import configparser
+import logging
+import os
 import types
 import typing
 
@@ -25,6 +26,11 @@ class Protobuf(_.records.Record):
         if hasattr(_, self.component_name):
             raise _.error('Record name "%s" for "%s" conflicts in _ root', self.component_name, module.__name__)
 
+        _.argparser.add_argument(f'--{self.component_name}',
+            action='store_true',
+            help='output Protobuf options template'
+            )
+
         # options come from Protobuf.proto but need to be compiled in-line to avoid headaches
         self._options_name = f"{kwds.get('options', 'Protobuf')}_pb2"
 
@@ -34,21 +40,27 @@ class Protobuf(_.records.Record):
         # access the types via the name or alias of the component
         setattr(_, self.component_name, self._container)
 
+        # default to JSON style tables instead of relational
         try:
             self.relational = _.config.getboolean(self.component_name, 'relational')
         except configparser.NoOptionError:
             self.relational = False
 
+        # default to creating handlers unless specified otherwise in the ini
         try:
             self.handlers = _.config.getboolean(self.component_name, 'handlers')
         except configparser.NoOptionError:
             self.handlers = True
 
-        await super().init(module, kwds.get('database',None))
+        await super().init(module, **kwds)
 
     @classmethod
     async def args(cls, component_name):
-        pass
+        if getattr(_.args, component_name, False):
+            path = os.path.join(os.path.dirname(__file__), 'Protobuf.proto')
+            protobuf = open(path, 'r').read()
+            print(protobuf)
+            _.application.stop()
 
     def load(self, module):
         try:
@@ -351,7 +363,6 @@ def handle(_message):
 #        return wrap
 
 if '__main__' == __name__:
-    import os
     path = os.path.join(os.path.dirname(__file__), 'Protobuf.proto')
     protobuf = open(path, 'r').read()
     print(protobuf)
