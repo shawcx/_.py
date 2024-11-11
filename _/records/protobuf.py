@@ -173,6 +173,8 @@ class Protobuf(_.records.Record):
                     child_tables[ref_table_name] = field
             else:
                 explicit_type = None
+                if column_type is bytes:
+                    explicit_type = self.db.BYTES
                 # support repeated field types
                 if field.label is field.LABEL_REPEATED:
                     if column_type is str:
@@ -345,12 +347,14 @@ class ProtoInterface(_.records.RecordsInterface):
             raise _.error('%s', e) from None
         return pb.SerializeToString()
 
+
 _handlers = {}
 def handle(_message):
     def wrap(_handler):
         _handlers[_message.DESCRIPTOR.name] = _handler
         return _handler
     return wrap
+
 
 #class ProtobufContainer(_.Container):
 #    _handlers = {}

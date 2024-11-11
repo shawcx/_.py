@@ -50,12 +50,13 @@ class UUID(sqlalchemy.types.TypeDecorator):
             value = uuid.UUID(value)
         return value
 
-
-@sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, 'connect')
-def set_sqlite_pragma(conn, record):
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+# TODO: test if calling this in init is sufficient
+#@sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, 'connect')
+#def set_sqlite_pragma(conn, record):
+#    if 'sqlite' in conn.__module__:
+#        cursor = conn.cursor()
+#        cursor.execute("PRAGMA foreign_keys=ON")
+#        cursor.close()
 
 
 class SQLite(_.databases.Database):
@@ -83,3 +84,5 @@ class SQLite(_.databases.Database):
     async def init(self, component_name, **kwds):
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)
         await super(SQLite, self).init(component_name, **kwds)
+        async with self.engine.begin() as conn:
+            await conn.run_sync(lambda conn: 'PRAGMA foreign_keys=ON')

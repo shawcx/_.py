@@ -20,7 +20,6 @@ import sqlalchemy
 import sqlalchemy.dialects.postgresql
 
 
-
 class Postgres(_.databases.Database):
     DRIVER = 'postgresql+asyncpg'
 

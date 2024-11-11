@@ -78,10 +78,13 @@ class RecordsInterface:
         return cls._from_dict(**json.loads(msg))
 
     def _as_dict(self):
-        return dataclasses.asdict(self)
+        _dict = dataclasses.asdict(self)
+        _dict[self.__primary_key__] = getattr(self, self.__primary_key__)
+        return _dict
 
     def _as_json(self, **kwds):
         return json.dumps(self, cls=_Json, separators=(',',':'), **kwds)
+
 
 
 class _Json(json.JSONEncoder):
@@ -95,6 +98,8 @@ class _Json(json.JSONEncoder):
         if isinstance(obj, datetime.datetime):
             return str(obj)
         return json.JSONEncoder.default(self, obj)
+
+json._default_encoder = _Json()
 
 
 class HandlerInterface(_.handlers.Protected):
@@ -112,7 +117,7 @@ class HandlerInterface(_.handlers.Protected):
     async def get(self, record_id):
         if not record_id:
             records = await self._db.find(self._record)
-            self.write(dict(data=[r._as_dict() for r in records]))
+            self.write(dict(data=records))
         else:
             record_id = int(record_id)
             record = await self._db.find_one(self._record, record_id)
