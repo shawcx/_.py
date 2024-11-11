@@ -21,7 +21,14 @@ class Skeleton(_.WebApplication):
 
         self.db = _.databases.store
 
-        if True:
+        message = _.proto.Message()
+        message.field1 = 'Matt'
+        message.field2 = b'\xff\x01abc'
+        print(message)
+        #await self.db.upsert(message)
+
+
+        if False:
             s = _.data.skel()
             s(
                 field1='name',
@@ -177,7 +184,7 @@ class Skeleton(_.WebApplication):
             }
         return session
 
-    async def on_login(self, handler, user):
+    async def on_login_success(self, handler, user):
         user.last = int(time.time() * 1000)
         await self.db.upsert(user)
 

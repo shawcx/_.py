@@ -34,7 +34,7 @@ message Numbers {
 message Message {
     option (id) = 'message_id';
     string field1  = 1;
-    string field2  = 2;
+    bytes  field2  = 2;
 }
 
 message NoTable {
