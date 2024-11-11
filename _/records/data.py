@@ -126,7 +126,7 @@ class Data(_.records.Record):
 
         members['__primary_key__'] = primary_key
 
-        table_type = type(name, (DataInterface,_.databases.Base,), members)
+        table_type = type(name, (DataInterface,self.db.Base,), members)
 
         for child_table,field in child_tables.items():
             child_type = self._data_table(child_table, field.type, parent=name, parent_key=primary_key, parent_col=field.name)
