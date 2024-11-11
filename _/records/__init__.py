@@ -86,7 +86,6 @@ class RecordsInterface:
         return json.dumps(self, cls=_Json, separators=(',',':'), **kwds)
 
 
-
 class _Json(json.JSONEncoder):
     def default(self, obj):
         if hasattr(obj, '_as_dict'):

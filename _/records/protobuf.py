@@ -35,7 +35,7 @@ class Protobuf(_.records.Record):
         self._options_name = f"{kwds.get('options', 'Protobuf')}_pb2"
 
         # container class for derived Python types
-        self._container = _.Container()
+        self._container = ProtobufContainer()
 
         # access the types via the name or alias of the component
         setattr(_, self.component_name, self._container)
@@ -82,13 +82,15 @@ class Protobuf(_.records.Record):
 
             # all proto messages end with _pb2
             if not member_name.endswith('_pb2'):
-                # load submodules for nested protobufs
-                if isinstance(member, types.ModuleType):
-                    self._container[member_name] = _.Container()
-                    stash = (self._container,self._module_name)
-                    self._container = self._container[member_name]
-                    self.load_module(member)
-                    (self._container,self._module_name) = stash
+                # ignore any module starting with _
+                if not member_name.startswith('_'):
+                    # load submodules for nested protobufs
+                    if isinstance(member, types.ModuleType):
+                        self._container[member_name] = _.Container()
+                        stash = (self._container,self._module_name)
+                        self._container = self._container[member_name]
+                        self.load_module(member)
+                        (self._container,self._module_name) = stash
                 continue
 
             # iterate over all the message definitions
@@ -163,7 +165,7 @@ class Protobuf(_.records.Record):
                         unique=unique,
                         init=False,
                         )
-                else:
+                else: # flat tables
                     members[field.name] = sqlalchemy.orm.relationship(
                         back_populates=name,
                         lazy='joined',
@@ -239,7 +241,7 @@ class Protobuf(_.records.Record):
 
     def _proto_handler(self, name, record_type, module_name):
         ## check if a custom handler was defined
-        proto_handler = _handlers.get(name)
+        proto_handler = self._container.handlers.get(name)
         if proto_handler:
             name = proto_handler.__name__
             module_name = proto_handler.__module__
@@ -281,22 +283,18 @@ class Protobuf(_.records.Record):
 
 class ProtoInterface(_.records.RecordsInterface):
     @staticmethod
-    def __descriptor(cls, descriptor, msg, dst):
+    def __descriptor(dst, descriptor, msg):
         for field in descriptor.fields:
             if field.type is field.TYPE_MESSAGE:
-                child_cls = getattr(cls, f'{field.name}')
                 if field.label == field.LABEL_REPEATED:
                     dst_list = getattr(dst, field.name)
                     for item in getattr(msg, field.name):
-                        child = child_cls()
-                        ProtoInterface.__descriptor(child_cls, field.message_type, item, child)
-                        dst_list.append(child)
+                        dst_list.append(ProtoInterface.__descriptor({}, field.message_type, item))
                 else:
-                    child = child_cls()
-                    ProtoInterface.__descriptor(child_cls, field.message_type, getattr(msg, field.name), child)
-                    setattr(dst, field.name, child)
+                    dst[field.name] = ProtoInterface.__descriptor({}, field.message_type, getattr(msg, field.name))
             else:
-                setattr(dst, field.name, getattr(msg, field.name))
+                dst[field.name] = getattr(msg, field.name)
+        return dst
 
     def __call__(self, *args, **kwds):
         msg = args[0] if args else kwds
@@ -305,7 +303,7 @@ class ProtoInterface(_.records.RecordsInterface):
             google.protobuf.json_format.ParseDict(msg, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
-        self.__descriptor(self, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(self, pb.DESCRIPTOR, pb)
 
     @classmethod
     def _from_dict(cls, *args, **kwds):
@@ -316,7 +314,7 @@ class ProtoInterface(_.records.RecordsInterface):
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
         self = cls()
-        self.__descriptor(cls, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(self, pb.DESCRIPTOR, pb)
         return self
 
     @classmethod
@@ -327,44 +325,39 @@ class ProtoInterface(_.records.RecordsInterface):
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
         self = cls()
-        self.__descriptor(cls, pb.DESCRIPTOR, pb, self)
+        self.__descriptor(self, pb.DESCRIPTOR, pb)
         return self
 
     @classmethod
     def _from_pb(cls, packed):
         pb = cls.__pb()
         pb.ParseFromString(packed)
-        msg = google.protobuf.json_format.MessageToJson(pb)
+        #msg = google.protobuf.json_format.MessageToJson(pb)
         self = cls()
-        self.__descriptor(cls, pb.DESCRIPTOR, msg, self)
+        self.__descriptor(self, pb.DESCRIPTOR, pb)
         return self
 
     def _as_pb(self):
         pb = self.__pb()
+        _dict = self._as_dict()
+        _dict.pop(self.__primary_key__, None)
         try:
-            google.protobuf.json_format.ParseDict(self._as_dict(), pb)
+            google.protobuf.json_format.ParseDict(_dict, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
         return pb.SerializeToString()
 
 
-_handlers = {}
-def handle(_message):
-    def wrap(_handler):
-        _handlers[_message.DESCRIPTOR.name] = _handler
-        return _handler
-    return wrap
+class ProtobufContainer(_.Container):
+    handlers = {}
 
+    # decorator for adding custom handlers for message types
+    def handles(self, _message):
+        def wrap(_handler):
+            self.handlers[_message.DESCRIPTOR.name] = _handler
+            return _handler
+        return wrap
 
-#class ProtobufContainer(_.Container):
-#    _handlers = {}
-#
-#    # decorator for adding custom handlers for message types
-#    def handles(self, _message):
-#        def wrap(_handler):
-#            self._handlers[_message.DESCRIPTOR.name] = _handler
-#            return _handler
-#        return wrap
 
 if '__main__' == __name__:
     path = os.path.join(os.path.dirname(__file__), 'Protobuf.proto')
