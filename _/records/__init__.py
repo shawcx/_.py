@@ -103,10 +103,19 @@ json._default_encoder = _Json()
 
 class HandlerInterface(_.handlers.Protected):
     def initialize(self):
-        self.set_header('Content-Type', 'application/json; charset=UTF-8')
+        self.content_type = self.get_argument('type', 'json')
+        if self.content_type == 'json':
+            self.set_header('Content-Type', 'application/json; charset=UTF-8')
+        else:
+            self.set_header('Content-Type', 'application/octet-stream')
+
         if self.request.body:
             try:
-                self.data = json.loads(self.request.body)
+                if self.content_type == 'json':
+                    self.data = json.loads(self.request.body)
+                else:
+                    self.data = self._record._from_binary(self.request.body)
+
             except:
                 raise _.HTTPError(500)
         else:
@@ -116,18 +125,24 @@ class HandlerInterface(_.handlers.Protected):
     async def get(self, record_id):
         if not record_id:
             records = await self._db.find(self._record)
-            self.write(dict(data=records))
+            if self.content_type == 'json':
+                self.write(dict(data=records))
+            else:
+                self.write(dict(data=records))
         else:
             record_id = int(record_id)
             record = await self._db.find_one(self._record, record_id)
             if record is None:
                 raise _.HTTPError(404)
-            self.write(record._as_dict())
+            if self.content_type == 'json':
+                self.write(record._as_dict())
+            else:
+                self.write(record._as_binary())
 
     @_.auth.records
     async def post(self, record_id, record=None):
         if record is None:
-            record = self._record._from_pb(self.request.body)
+            record = self._record._from_binary(self.request.body)
         try:
             await self._db.insert(record)
         except _.error as e:
@@ -144,7 +159,6 @@ class HandlerInterface(_.handlers.Protected):
         except _.error as e:
             raise _.HTTPError(500, e) from None
         self.set_status(204)
-        #self.write(record._as_dict())
 
     @_.auth.records
     async def delete(self, record_id):

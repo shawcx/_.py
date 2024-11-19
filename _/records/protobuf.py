@@ -287,9 +287,9 @@ class ProtoInterface(_.records.RecordsInterface):
         for field in descriptor.fields:
             if field.type is field.TYPE_MESSAGE:
                 if field.label == field.LABEL_REPEATED:
-                    dst_list = getattr(dst, field.name)
+                    dst[field.name] = []
                     for item in getattr(msg, field.name):
-                        dst_list.append(ProtoInterface.__descriptor({}, field.message_type, item))
+                        dst[field.name].append(ProtoInterface.__descriptor({}, field.message_type, item))
                 else:
                     dst[field.name] = ProtoInterface.__descriptor({}, field.message_type, getattr(msg, field.name))
             else:
@@ -303,7 +303,7 @@ class ProtoInterface(_.records.RecordsInterface):
             google.protobuf.json_format.ParseDict(msg, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
-        self.__descriptor(self, pb.DESCRIPTOR, pb)
+        return ProtoInterface.__descriptor(self, pb.DESCRIPTOR, pb)
 
     @classmethod
     def _from_dict(cls, *args, **kwds):
@@ -313,9 +313,7 @@ class ProtoInterface(_.records.RecordsInterface):
             google.protobuf.json_format.ParseDict(msg, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
-        self = cls()
-        self.__descriptor(self, pb.DESCRIPTOR, pb)
-        return self
+        return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
 
     @classmethod
     def _from_json(cls, msg):
@@ -324,20 +322,15 @@ class ProtoInterface(_.records.RecordsInterface):
             google.protobuf.json_format.Parse(msg, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
-        self = cls()
-        self.__descriptor(self, pb.DESCRIPTOR, pb)
-        return self
+        return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
 
     @classmethod
-    def _from_pb(cls, packed):
+    def _from_binary(cls, packed):
         pb = cls.__pb()
         pb.ParseFromString(packed)
-        #msg = google.protobuf.json_format.MessageToJson(pb)
-        self = cls()
-        self.__descriptor(self, pb.DESCRIPTOR, pb)
-        return self
+        return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
 
-    def _as_pb(self):
+    def _as_binary(self):
         pb = self.__pb()
         _dict = self._as_dict()
         _dict.pop(self.__primary_key__, None)

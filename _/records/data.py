@@ -4,8 +4,8 @@ import functools
 import inspect
 import logging
 import json
+import pickle
 import typing
-import uuid
 
 import sqlalchemy
 import tornado.web
@@ -164,25 +164,29 @@ class DataInterface(_.records.RecordsInterface):
             else:
                 if field.name in msg:
                     setattr(dst, field.name, msg[field.name])
+        return dst
 
     def __call__(self, *args, **kwds):
         msg = args[0] if args else kwds
-        self.__dataclass(self, msg, self)
-        return self
+        return DataInterface.__dataclass(self, msg, self)
 
     @classmethod
     def _from_dict(cls, *args, **kwds):
         msg = args[0] if args else kwds
-        self = cls()
-        self.__dataclass(cls, msg, self)
-        return self
+        return DataInterface.__dataclass(cls, msg, cls())
 
     @classmethod
     def _from_json(cls, msg):
-        msg = json.loads(msg)
-        self = cls()
-        self.__dataclass(cls, msg, self)
-        return self
+        return DataInterface.__dataclass(cls, json.loads(msg), cls())
+
+    @classmethod
+    def _from_binary(cls, msg):
+        return DataInterface.__dataclass(cls, pickle.loads(msg), cls())
+
+    def _as_binary(self):
+        _dict = self._as_dict()
+        _dict.pop(self.__primary_key__, None)
+        return pickle.dumps(_dict)
 
 
 class DataContainer(_.Container):

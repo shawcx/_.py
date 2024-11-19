@@ -68,7 +68,8 @@ current_user = filter_user(lambda current_user: True)
 protected    = filter_user(lambda current_user: True)
 
 # default record access is unprotected
-records = lambda fn: fn
+records      = lambda fn: fn
+
 
 # implement old school user/name password prompt
 # useful for command-line tools to pass as part of the URL
