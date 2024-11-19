@@ -22,13 +22,39 @@ class Skeleton(_.WebApplication):
         self.db = _.databases.store
 
         message = _.proto.Message()
+        message.message_id = 1
         message.field1 = 'Matt'
         message.field2 = b'\xff\x01abc'
         print(message)
-        #await self.db.upsert(message)
+        await self.db.upsert(message)
 
+        r = _.proto.Reports()
+        r.single = {}
+        r.single['source'] = 'matt'
+        r.single['count'] = 10
+        r.single['deep'] = {}
+        r.single['deep']['deep'] = 'DEEP'
+        r.multiple = []
+        for x in range(4):
+            m = dict(
+                source=f'{x * x}',
+                count = x,
+                )
+            r.multiple.append(m)
+        r.req = '88'
+        print('JSON:', r._as_json())
+        data = r._as_binary()
+        print('BINARY:', data)
+        x = _.proto.Reports._from_binary(data)
+        x.single['count2'] = 10
+        x.Reports_id = 35
+        print(x)
 
         if False:
+            await self.db.upsert(x)
+        await self.db.upsert(x)
+
+        if True:
             s = _.data.skel()
             s(
                 field1='name',
@@ -37,12 +63,20 @@ class Skeleton(_.WebApplication):
                 lat=1.2,
                 lng=3.4,
                 )
+            print()
+            b = s._as_binary()
+            print(b)
+            b = _.data.skel._from_binary(b)
+            print(b)
+            print()
             try:
                 await self.db.insert(s)
             except Exception as e:
                 s = await self.db.find_one(_.data.skel, None)
-                await self.db.delete(s)
+                if s:
+                    await self.db.delete(s)
 
+        if False:
             #print(skel._as_json())
             #print(skel._as_dict())
             #print()
@@ -73,7 +107,7 @@ class Skeleton(_.WebApplication):
             skel2 = _.proto.Skeleton()
             skel2(field1='500',field2='600')
             print(skel2._as_json())
-            print(skel2._as_pb())
+            print(skel2._as_binary())
             skel2.field1 = 'skel'
             skel2.field2 = 'example'
             print(skel2._as_dict())
@@ -127,12 +161,12 @@ class Skeleton(_.WebApplication):
             #await self.db.update(one)
 
             #print(r._as_json())
-            p = r._as_pb()
-            r2 = _.proto.Reports._from_pb(p)
+            p = r._as_binary()
+            r2 = _.proto.Reports._from_binary(p)
             #r2 = _.proto.Reports._from_json(r._as_json())
             print(r2)
             print()
-            print(r2._as_pb())
+            print(r2._as_binary())
             print()
             #print(r2._as_dict())
             print()
@@ -174,7 +208,7 @@ class Skeleton(_.WebApplication):
     async def on_dblogin_update(self, handler, name, record):
         'allow apps to make adjustments to the record before calling sql statement'
 
-    async def on_gitlab_login(self, handler, user):
+    async def on_gitlab_login_success(self, handler, user):
         session = {
             'session_id' : str(uuid.uuid4()),
             'username'   : user['username'],
@@ -186,7 +220,7 @@ class Skeleton(_.WebApplication):
 
     async def on_login_success(self, handler, user):
         user.last = int(time.time() * 1000)
-        await self.db.upsert(user)
+        await _.databases.sqlite.upsert(user)
 
         session = {
             'session_id' : str(uuid.uuid4()),

@@ -21,7 +21,7 @@ message Reports {
 
              Report single   = 1;
     repeated Report multiple = 2;
-             string req   = 3 [(required) = true];
+             string req      = 3 [(required) = true];
 }
 
 message Numbers {
