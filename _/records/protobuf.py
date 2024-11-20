@@ -86,7 +86,7 @@ class Protobuf(_.records.Record):
                 if not member_name.startswith('_'):
                     # load submodules for nested protobufs
                     if isinstance(member, types.ModuleType):
-                        self._container[member_name] = _.Container()
+                        self._container[member_name] = ProtobufContainerw()
                         stash = (self._container,self._module_name)
                         self._container = self._container[member_name]
                         self.load_module(member)
