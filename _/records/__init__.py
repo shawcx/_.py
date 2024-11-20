@@ -79,7 +79,8 @@ class RecordsInterface:
 
     def _as_dict(self):
         _dict = dataclasses.asdict(self)
-        _dict[self.__primary_key__] = getattr(self, self.__primary_key__)
+        if hasattr(self, self.__primary_key__):
+            _dict[self.__primary_key__] = getattr(self, self.__primary_key__)
         return _dict
 
     def _as_json(self, **kwds):
