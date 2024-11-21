@@ -86,10 +86,11 @@ class Database:
             return results.unique().scalars().first()
 
     # UPDATE
-    async def upsert(self, obj):
+    async def upsert(self, *args):
         async with self.session() as session:
             async with session.begin():
-                await session.merge(obj)
+                for obj in args:
+                    await session.merge(obj)
 
     # DELETE
     async def delete(self, obj, value=None):
