@@ -333,6 +333,14 @@ class ProtoInterface(_.records.RecordsInterface):
         return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
 
     def _as_binary(self):
+        pb = self._as_pb()
+        return pb.SerializeToString()
+
+    @classmethod
+    def _from_pb(cls, pb):
+        return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
+
+    def _as_pb(self):
         pb = self.__pb()
         _dict = self._as_dict()
         _dict.pop(self.__primary_key__, None)
@@ -340,7 +348,7 @@ class ProtoInterface(_.records.RecordsInterface):
             google.protobuf.json_format.ParseDict(_dict, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
-        return pb.SerializeToString()
+        return pb
 
 
 class ProtobufContainer(_.Container):
