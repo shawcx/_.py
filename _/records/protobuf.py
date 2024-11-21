@@ -7,6 +7,7 @@
 #
 
 import configparser
+import dataclasses
 import logging
 import os
 import types
@@ -102,6 +103,7 @@ class Protobuf(_.records.Record):
                     record_type = self._proto_table(name, message=message)
                 else:
                     record_type = type(name, (ProtoInterface,), {'_ProtoInterface__pb' : message,})
+                    record_type = dataclasses.dataclass(init=False, kw_only=True)(record_type)
 
                 self._container[name] = record_type
 
