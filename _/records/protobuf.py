@@ -362,11 +362,16 @@ class ProtobufContainer(_.Container):
             return _handler
         return wrap
 
+MessageToDict = lambda obj: google.protobuf.json_format.MessageToDict(
+                obj,
+                always_print_fields_with_no_presence = True,
+                preserving_proto_field_name    = True,
+                )
 
 class ProtoJSONEncoder(_.JSONEncoder):
     def default(self, obj):
         if hasattr(obj, 'DESCRIPTOR'):
-            return google.protobuf.json_format.MessageToDict(obj)
+            return MessageToDict(obj)
         return _.JSONEncoder.default(self, obj)
 
 json._default_encoder = ProtoJSONEncoder()
