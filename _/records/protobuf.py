@@ -366,7 +366,7 @@ class ProtobufContainer(_.Container):
 class ProtoJSONEncoder(_.JSONEncoder):
     def default(self, obj):
         if hasattr(obj, 'DESCRIPTOR'):
-            return google.protobuf.json_format.MessageToJson(obj)
+            return google.protobuf.json_format.MessageToDict(obj)
         return _.JSONEncoder.default(self, obj)
 
 json._default_encoder = ProtoJSONEncoder()
