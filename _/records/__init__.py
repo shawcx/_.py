@@ -6,13 +6,10 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
-import base64
 import dataclasses
-import datetime
 import importlib
 import json
 import logging
-import uuid
 
 import sqlalchemy
 import sqlalchemy.ext.asyncio
@@ -85,21 +82,6 @@ class RecordsInterface:
 
     def _as_json(self, **kwds):
         return json.dumps(self, cls=_Json, separators=(',',':'), **kwds)
-
-
-class _Json(json.JSONEncoder):
-    def default(self, obj):
-        if hasattr(obj, '_as_dict'):
-            return obj._as_dict()
-        if isinstance(obj, bytes):
-            return base64.b64encode(obj).decode('ascii')
-        if isinstance(obj, uuid.UUID):
-            return str(obj)
-        if isinstance(obj, datetime.datetime):
-            return str(obj)
-        return json.JSONEncoder.default(self, obj)
-
-json._default_encoder = _Json()
 
 
 class HandlerInterface(_.handlers.Protected):

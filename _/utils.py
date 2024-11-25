@@ -7,10 +7,14 @@
 #
 
 import asyncio
+import base64
+import datetime
+import json
 import inspect
 import logging
 import os
 import time
+import uuid
 
 import tornado.web
 
@@ -64,3 +68,18 @@ class Paths:
 
     def __str__(self):
         return self()
+
+
+class JSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, '_as_dict'):
+            return obj._as_dict()
+        if isinstance(obj, bytes):
+            return base64.b64encode(obj).decode('ascii')
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        if isinstance(obj, datetime.datetime):
+            return str(obj)
+        return json.JSONEncoder.default(self, obj)
+
+json._default_encoder = JSONEncoder()

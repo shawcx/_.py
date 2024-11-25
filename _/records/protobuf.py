@@ -8,6 +8,7 @@
 
 import configparser
 import dataclasses
+import json
 import logging
 import os
 import types
@@ -360,6 +361,15 @@ class ProtobufContainer(_.Container):
             self.handlers[_message.DESCRIPTOR.name] = _handler
             return _handler
         return wrap
+
+
+class ProtoJSONEncoder(_.JSONEncoder):
+    def default(self, obj):
+        if hasattr(obj, 'DESCRIPTOR'):
+            return google.protobuf.json_format.MessageToJson(obj)
+        return _.JSONEncoder.default(self, obj)
+
+json._default_encoder = ProtoJSONEncoder()
 
 
 if '__main__' == __name__:
