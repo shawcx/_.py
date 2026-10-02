@@ -6,6 +6,7 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import asyncio
 import json
 import logging
 import typing
@@ -88,7 +89,7 @@ class DbLogin(_.logins.Login):
         add_user = getattr(_.args, f'{prefix}add_user')
         if add_user:
             username,password = add_user
-            password = _.auth.simple_hash(username + password)
+            password = _.auth.hash_password(password)
 
             record = dict((k,None) for k in _.config[component_name])
             record.pop('database', None)
@@ -117,12 +118,6 @@ class DbLogin(_.logins.Login):
 
     @classmethod
     async def check(cls, username, password):
-        if password:
-            password = _.auth.simple_hash(username + password)
-
-        account = cls._table()
-        setattr(account, cls._username, username)
-
         try:
             record = await cls._db.find_one(cls._table, username)
         except _.error as e:
@@ -133,9 +128,16 @@ class DbLogin(_.logins.Login):
             logging.warning('No user: %s', username)
             return None
 
-        if password != record[cls._password]:
+        stored = record[cls._password]
+        # hashing is CPU bound so keep it off the event loop
+        if not await asyncio.to_thread(_.auth.verify_password, password, stored, username):
             logging.warning('Bad password: %s', username)
             return None
+
+        # transparently upgrade legacy or weaker hashes
+        if _.auth.needs_rehash(stored):
+            record[cls._password] = await asyncio.to_thread(_.auth.hash_password, password)
+            await cls._db.upsert(record)
 
         return record
 
@@ -203,7 +205,7 @@ class DBLoginRecords(_.handlers.Protected):
             await _.wait(callback(self._component, user))
 
         if not user[self._password]:
-            password = _.auth.simple_hash(username + password)
+            password = await asyncio.to_thread(_.auth.hash_password, password)
             user[self._password] = password
 
         await self._db.insert(user)

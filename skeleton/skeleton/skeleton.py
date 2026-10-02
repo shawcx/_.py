@@ -13,6 +13,9 @@ import skeleton
 # must be set before _.settings.load is called
 _.auth.protected = _.auth.filter_user(lambda current_user: current_user)
 
+# record handlers are open by default, require a session for them as well
+_.auth.records = _.auth.filter_user(lambda current_user: current_user)
+
 import sqlalchemy
 
 class Skeleton(_.WebApplication):
