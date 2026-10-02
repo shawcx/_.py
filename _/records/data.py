@@ -1,11 +1,14 @@
 
+import base64
+import binascii
 import dataclasses
+import datetime
 import functools
 import inspect
 import logging
 import json
-import pickle
 import typing
+import uuid
 
 import sqlalchemy
 import tornado.web
@@ -152,18 +155,34 @@ class Data(_.records.Record):
         _.application._record_handler(self.component_name, record_handler)
 
 
+# restore types that JSON flattens to strings, see _.JSONEncoder
+_decoders = {
+    bytes             : lambda v: base64.b64decode(v, validate=True),
+    uuid.UUID         : uuid.UUID,
+    datetime.datetime : datetime.datetime.fromisoformat,
+    }
+
+
 class DataInterface(_.records.RecordsInterface):
     @staticmethod
     def __dataclass(cls, msg, dst):
+        if not isinstance(msg, dict):
+            raise _.error('Expected an object for %s', cls.__name__)
         for field in dataclasses.fields(cls):
             child_cls = getattr(cls, f'_{field.name}', None)
             if child_cls:
                 child = child_cls()
-                DataInterface.__dataclass(child_cls, msg.get(field.name), child)
+                DataInterface.__dataclass(child_cls, msg.get(field.name) or {}, child)
                 setattr(dst, field.name, child)
-            else:
-                if field.name in msg:
-                    setattr(dst, field.name, msg[field.name])
+            elif field.name in msg:
+                value  = msg[field.name]
+                decode = _decoders.get(field.type)
+                if decode and isinstance(value, str):
+                    try:
+                        value = decode(value)
+                    except (ValueError,binascii.Error) as e:
+                        raise _.error('Invalid %s for %s: %s', field.type.__name__, field.name, e) from None
+                setattr(dst, field.name, value)
         return dst
 
     def __call__(self, *args, **kwds):
@@ -177,16 +196,21 @@ class DataInterface(_.records.RecordsInterface):
 
     @classmethod
     def _from_json(cls, msg):
-        return DataInterface.__dataclass(cls, json.loads(msg), cls())
+        try:
+            msg = json.loads(msg)
+        except ValueError as e:
+            raise _.error('Invalid JSON: %s', e) from None
+        return DataInterface.__dataclass(cls, msg, cls())
 
+    # the binary form is compact UTF-8 JSON; never unpickle data from clients
     @classmethod
     def _from_binary(cls, msg):
-        return DataInterface.__dataclass(cls, pickle.loads(msg), cls())
+        return cls._from_json(msg)
 
     def _as_binary(self):
         _dict = self._as_dict()
-        _dict.pop(self.__primary_key__, None)
-        return pickle.dumps(_dict)
+        _dict.pop(getattr(self, '__primary_key__', None), None)
+        return json.dumps(_dict, cls=self._json_encoder, separators=(',',':')).encode('utf-8')
 
 
 class DataContainer(_.Container):

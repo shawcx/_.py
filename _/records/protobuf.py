@@ -154,7 +154,7 @@ class Protobuf(_.records.Record):
                     ref_table_name = f'{name}_{field.name}'
                     column_type = ref_table_name
 
-                if field.label is field.LABEL_REPEATED:
+                if field.is_repeated:
                     column_type = list[column_type]
 
                 column_type = sqlalchemy.orm.Mapped[typing.Optional[column_type]]
@@ -181,7 +181,7 @@ class Protobuf(_.records.Record):
                 if column_type is bytes:
                     explicit_type = self.db.BYTES
                 # support repeated field types
-                if field.label is field.LABEL_REPEATED:
+                if field.is_repeated:
                     if column_type is str:
                         explicit_type = sqlalchemy.ARRAY(sqlalchemy.TEXT)
                     column_type = list[column_type]
@@ -284,12 +284,38 @@ class Protobuf(_.records.Record):
         ]
 
 
+MessageToDict = lambda obj: google.protobuf.json_format.MessageToDict(
+                obj,
+                always_print_fields_with_no_presence = True,
+                preserving_proto_field_name          = True,
+                )
+
+
+class ProtoJSONEncoder(_.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, google.protobuf.message.Message):
+            return MessageToDict(obj)
+        return _.JSONEncoder.default(self, obj)
+
+json._default_encoder = ProtoJSONEncoder()
+
+
 class ProtoInterface(_.records.RecordsInterface):
+    _json_encoder = ProtoJSONEncoder
+
+    def _as_dict(self):
+        # records without a table are dataclasses with no fields, so read the
+        # values using the message descriptor instead
+        if dataclasses.fields(self):
+            return super()._as_dict()
+        fields = self.__pb.DESCRIPTOR.fields
+        return {f.name: getattr(self, f.name) for f in fields if hasattr(self, f.name)}
+
     @staticmethod
     def __descriptor(dst, descriptor, msg):
         for field in descriptor.fields:
             if field.type is field.TYPE_MESSAGE:
-                if field.label == field.LABEL_REPEATED:
+                if field.is_repeated:
                     dst[field.name] = []
                     for item in getattr(msg, field.name):
                         dst[field.name].append(ProtoInterface.__descriptor({}, field.message_type, item))
@@ -310,27 +336,37 @@ class ProtoInterface(_.records.RecordsInterface):
 
     @classmethod
     def _from_dict(cls, *args, **kwds):
-        msg = args[0] if args else kwds
+        msg = dict(args[0] if args else kwds)
+        # the primary key is a table column, not a protobuf field, see _as_pb
+        primary_key = getattr(cls, '__primary_key__', None)
+        record_id = msg.pop(primary_key, None) if primary_key else None
         pb = cls.__pb()
         try:
             google.protobuf.json_format.ParseDict(msg, pb)
         except google.protobuf.json_format.ParseError as e:
             raise _.error('%s', e) from None
-        return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
+        record = ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
+        if record_id is not None:
+            setattr(record, primary_key, record_id)
+        return record
 
     @classmethod
     def _from_json(cls, msg):
-        pb = cls.__pb()
         try:
-            google.protobuf.json_format.Parse(msg, pb)
-        except google.protobuf.json_format.ParseError as e:
-            raise _.error('%s', e) from None
-        return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
+            msg = json.loads(msg)
+        except ValueError as e:
+            raise _.error('Invalid JSON: %s', e) from None
+        if not isinstance(msg, dict):
+            raise _.error('Expected an object for %s', cls.__name__)
+        return cls._from_dict(msg)
 
     @classmethod
     def _from_binary(cls, packed):
         pb = cls.__pb()
-        pb.ParseFromString(packed)
+        try:
+            pb.ParseFromString(packed)
+        except google.protobuf.message.DecodeError as e:
+            raise _.error('%s', e) from None
         return ProtoInterface.__descriptor(cls(), pb.DESCRIPTOR, pb)
 
     def _as_binary(self):
@@ -344,7 +380,7 @@ class ProtoInterface(_.records.RecordsInterface):
     def _as_pb(self):
         pb = self.__pb()
         _dict = self._as_dict()
-        _dict.pop(self.__primary_key__, None)
+        _dict.pop(getattr(self, '__primary_key__', None), None)
         try:
             google.protobuf.json_format.ParseDict(_dict, pb)
         except google.protobuf.json_format.ParseError as e:
@@ -361,21 +397,6 @@ class ProtobufContainer(_.Container):
             self.handlers[_message.DESCRIPTOR.name] = _handler
             return _handler
         return wrap
-
-MessageToDict = lambda obj: google.protobuf.json_format.MessageToDict(
-                obj,
-                always_print_fields_with_no_presence = True,
-                preserving_proto_field_name    = True,
-                )
-
-class ProtoJSONEncoder(_.JSONEncoder):
-    def default(self, obj):
-        if hasattr(obj, 'DESCRIPTOR'):
-            return MessageToDict(obj)
-        return _.JSONEncoder.default(self, obj)
-
-json._default_encoder = ProtoJSONEncoder()
-
 
 if '__main__' == __name__:
     path = os.path.join(os.path.dirname(__file__), 'Protobuf.proto')
