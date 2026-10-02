@@ -27,7 +27,7 @@ class Protected(Template):
             raise _.HTTPError(500, 'No session component specified')
 
         self.session = None
-        session_id = self.get_secure_cookie('session_id', max_age_days=1)
+        session_id = self.get_signed_cookie('session_id', max_age_days=1)
         if session_id:
             session_id = session_id.decode('utf-8')
             self.session = await _.wait(_.sessions.load_session(session_id))

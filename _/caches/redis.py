@@ -40,7 +40,7 @@ class Redis(_.caches.Cache):
         _.application._record_handler('sessions', subclass)
 
     async def close(self):
-        await self.redis.close()
+        await self.redis.aclose()
         self.redis = None
 
     async def cookie_secret(self):

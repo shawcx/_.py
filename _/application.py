@@ -28,7 +28,7 @@ class Application:
             logging.error('%s', e)
 
     async def _async_main(self, ns):
-        self.loop = asyncio.get_event_loop()
+        self.loop = asyncio.get_running_loop()
         self._stop_event = asyncio.Event()
 
         signal.signal(signal.SIGINT,  self.__signalHandler)
