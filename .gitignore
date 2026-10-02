@@ -8,3 +8,4 @@ __pycache__
 /deb_dist
 /*.egg-info
 /*.tar.gz
+/.venv
