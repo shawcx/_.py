@@ -42,7 +42,7 @@ class Login(tornado.web.RequestHandler):
         try:
             session = await _.wait(fn(self, user))
             await _.wait(_.sessions.save_session(session))
-            self.set_secure_cookie('session_id', session['session_id'], expires_days=1)
+            self.set_signed_cookie('session_id', session['session_id'], expires_days=1)
         except NotImplementedError:
             raise _.HTTPError(500, 'on_login_success method not implemented') from None
         self.redirect(self.next_url)
@@ -71,7 +71,7 @@ class LoginPage(tornado.web.RequestHandler):
 
 class Logout(tornado.web.RequestHandler):
     async def get(self):
-        session_id = self.get_secure_cookie('session_id', max_age_days=1)
+        session_id = self.get_signed_cookie('session_id', max_age_days=1)
 
         if session_id:
             session_id = session_id.decode('utf-8')

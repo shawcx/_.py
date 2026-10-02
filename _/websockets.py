@@ -37,7 +37,7 @@ class Protected(WebSocket):
     '''Require a valid user session to establish WebSocket connection'''
 
     async def prepare(self):
-        self.session_id = self.get_secure_cookie('session_id')
+        self.session_id = self.get_signed_cookie('session_id')
         if not self.session_id:
             raise _.HTTPError(403)
         self.session_id = self.session_id.decode('utf-8')
