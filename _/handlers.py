@@ -13,7 +13,18 @@ import tornado.web
 import _
 
 
-class Template(tornado.web.RequestHandler):
+class Handler(tornado.web.RequestHandler):
+    '''base for _ handlers, writes dicts and lists as JSON with _.JSONEncoder so
+       records, bytes and datetimes can be written directly'''
+    def write(self, chunk):
+        if isinstance(chunk, (dict, list)):
+            self.set_header('Content-Type', 'application/json; charset=UTF-8')
+            # like tornado, escape </ so the JSON is safe inside a script tag
+            chunk = _.json_encode(chunk).replace('</', '<\\/')
+        super().write(chunk)
+
+
+class Template(Handler):
     def initialize(self, template='index', **kwds):
         self.kwds = kwds
         self.template = template + '.html'

@@ -422,7 +422,8 @@ class Protobuf(_.records.Record):
             handler_name = proto_handler.__name__
             module_name = proto_handler.__module__
         types = [proto_handler] if proto_handler else [_.records.HandlerInterface]
-        types.append(tornado.web.RequestHandler)
+        # custom handlers get the JSON writing of the _ base handler
+        types.append(_.handlers.Handler)
 
         # served at the message's route, whichever handler class is used
         record_handler = type(handler_name, tuple(types), {
@@ -657,14 +658,6 @@ class ProtobufContainer(_.Container):
         return wrap
 
 MessageToDict = _json_form
-
-class ProtoJSONEncoder(_.JSONEncoder):
-    def default(self, obj):
-        if hasattr(obj, 'DESCRIPTOR'):
-            return MessageToDict(obj)
-        return _.JSONEncoder.default(self, obj)
-
-json._default_encoder = ProtoJSONEncoder()
 
 
 if '__main__' == __name__:

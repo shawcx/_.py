@@ -25,6 +25,12 @@ class WebSocket(tornado.websocket.WebSocketHandler):
         # TODO: let app specify origin policy
         return True
 
+    def write_message(self, message, binary=False):
+        # dicts and lists are encoded with _.JSONEncoder, like _.handlers.Handler
+        if isinstance(message, (dict, list)):
+            message = _.json_encode(message)
+        return super().write_message(message, binary)
+
     def open(self):
         self.set_nodelay(True)
         self.websockets[id(self)] = self

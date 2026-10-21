@@ -12,6 +12,14 @@ Unreleased
   `"90.5s"`, bytes as base64. Unset optional and message fields are left
   out, and relational child records no longer include their internal ids.
   A generated primary key such as `order_id` is still included.
+- **The `json` module is no longer patched.** Importing `_` used to replace
+  the default encoder for the whole process. Now `_.JSONEncoder` is used
+  explicitly: by `_.handlers.Handler.write()`, which every `_` handler and
+  custom record handler derives from, by `_.websockets.WebSocket.write_message()`,
+  and by `_.json_encode()` for app code. A plain `json.dumps()` of records,
+  bytes or datetimes now raises `TypeError`, as does writing them from a
+  handler built directly on `tornado.web.RequestHandler`; use
+  `_.json_encode()` or derive from `_.handlers.Handler`.
 - **JSON output of dates and times** is ISO 8601 for every record type, for
   example `2024-05-01T12:00:00+00:00` rather than `2024-05-01 12:00:00+00:00`.
   `date` and `time` values, which used to fail, are encoded too.

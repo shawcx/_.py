@@ -140,7 +140,8 @@ class Data(_.records.Record):
             return
 
         types = [data_handler] if data_handler else [_.records.HandlerInterface]
-        types.append(tornado.web.RequestHandler)
+        # custom handlers get the JSON writing of the _ base handler
+        types.append(_.handlers.Handler)
 
         # served at the record name, whichever handler class is used
         handler_name = data_handler.__name__ if data_handler else name

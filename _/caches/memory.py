@@ -34,7 +34,7 @@ class Memory(_.caches.Cache):
             session_id = session['session_id']
         except KeyError:
             raise _.error('No session_id defined in session')
-        self.sessions[session_id] = json.dumps(session)
+        self.sessions[session_id] = _.json_encode(session)
 
     async def load_session(self, session_id):
         session = self.sessions.get(session_id, None)

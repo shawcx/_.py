@@ -6,7 +6,7 @@ import tornado.web
 import _
 
 
-class Login(tornado.web.RequestHandler):
+class Login(_.handlers.Handler):
     @classmethod
     async def _(cls, component_name, **kwds):
         # create a dynamic child class with kwds from the ini file
@@ -57,7 +57,7 @@ class Login(tornado.web.RequestHandler):
         self.redirect(url)
 
 
-class LoginPage(tornado.web.RequestHandler):
+class LoginPage(_.handlers.Handler):
     def initialize(self, template='login', **kwds):
         self.kwds = kwds
         self.template = template + '.html'
@@ -69,7 +69,7 @@ class LoginPage(tornado.web.RequestHandler):
         self.render(template, message=message, next_url=next_url, **self.kwds)
 
 
-class Logout(tornado.web.RequestHandler):
+class Logout(_.handlers.Handler):
     async def get(self):
         session_id = self.get_signed_cookie('session_id', max_age_days=1)
 

@@ -59,6 +59,6 @@ Tests: set up with `uv venv && uv pip install -e '.[test,protobuf,postgres]'`, t
 **Conventions**
 - Hooks may be sync or async; the framework calls them through `await _.wait(...)`.
 - Raise `_.error(fmt, *args)` for user-facing failures; it's logged without a traceback unless `--debug`. Use `_.HTTPError` in handlers.
-- Importing `_` replaces `json`'s default encoder with `_.JSONEncoder` (handles `_as_dict`, bytes→base64, UUID, datetime). `protobuf.py` replaces it again when loaded.
+- JSON goes through `_.JSONEncoder` explicitly: records via `_as_dict`, protobuf messages, bytes as base64, UUIDs, ISO 8601 dates and times. The `json` module isn't patched. Handlers should derive from `_.handlers.Handler` (all of `_`'s do), whose `write()` encodes dicts and lists with it. `_.websockets.WebSocket.write_message()` does the same, and app code uses `_.json_encode()`.
 - `_.handlers.Template` renders `<path>.html` from `templates/`. `_.handlers.Protected` and `_.auth` decorators check the signed `session_id` cookie.
 - `_.auth.records` is a no-op by design, so generated record endpoints are open. Apps replace it, before components load, with whatever auth suits them. Don't change the default.

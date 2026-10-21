@@ -71,9 +71,18 @@ class Paths:
 
 
 class JSONEncoder(json.JSONEncoder):
+    '''encodes records, protobuf messages, bytes, UUIDs, dates and times;
+       pass it explicitly or use _.json_encode, the json module is untouched'''
     def default(self, obj):
         if hasattr(obj, '_as_dict'):
             return obj._as_dict()
+        # protobuf messages, recognised without importing protobuf
+        if hasattr(obj, 'DESCRIPTOR') and hasattr(obj, 'ListFields'):
+            import google.protobuf.json_format
+            return google.protobuf.json_format.MessageToDict(obj,
+                always_print_fields_with_no_presence = True,
+                preserving_proto_field_name          = True,
+                )
         if isinstance(obj, bytes):
             return base64.b64encode(obj).decode('ascii')
         if isinstance(obj, uuid.UUID):
@@ -85,4 +94,7 @@ class JSONEncoder(json.JSONEncoder):
             return obj.total_seconds()
         return json.JSONEncoder.default(self, obj)
 
-json._default_encoder = JSONEncoder()
+
+def json_encode(obj, **kwds):
+    'json.dumps with _.JSONEncoder'
+    return json.dumps(obj, cls=JSONEncoder, **kwds)

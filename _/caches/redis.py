@@ -56,7 +56,7 @@ class Redis(_.caches.Cache):
         except KeyError:
             raise _.error('No session_id defined in session')
         async with self.redis.pipeline(transaction=True) as pipe:
-            await pipe.set(f'session/{session_id}', json.dumps(session))
+            await pipe.set(f'session/{session_id}', _.json_encode(session))
             await pipe.expire(f'session/{session_id}', self._expires * 3600)
             await pipe.execute()
 
