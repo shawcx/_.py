@@ -122,3 +122,24 @@ def test_basic_auth(basic_server):
     assert basic_request(basic_server, credentials('alice', 'secret'))[:2] == (200, b'ok')
     # a header that isn't base64 is a bad request rather than a server error
     assert basic_request(basic_server, 'Basic !!!')[0] == 400
+
+
+def test_dblogin_unknown_database(run_app, tmp_path):
+    result = run_app({
+        'app.py'  : CHECK,
+        'app.ini' : f'''
+            [databases]
+            db = sqlite
+
+            [db]
+            database = {tmp_path}/db.db
+
+            [logins]
+            dblogin
+
+            [dblogin]
+            database = nope
+            ''',
+        })
+    assert 'Unknown database "nope" for dblogin' in result.stderr
+    assert 'Traceback' not in result.stderr

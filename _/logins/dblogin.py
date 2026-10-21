@@ -32,8 +32,8 @@ class DbLogin(_.logins.Login):
                 raise _.error('dblogin requires a database to be specified')
         try:
             cls._db = _.databases[cls._database]
-        except AttributeError:
-            raise _.error('No database specified for %s', component_name)
+        except KeyError:
+            raise _.error('Unknown database "%s" for %s', cls._database, component_name) from None
 
         # if only one login specified use short argument
         prefix = f'{component_name}-' if len(_.config['logins']) > 1 else ''
