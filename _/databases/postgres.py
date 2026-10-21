@@ -40,3 +40,6 @@ class Postgres(_.databases.Database):
             dict[str, typing.Any]:       sqlalchemy.dialects.postgresql.JSONB,
             list[dict[str, typing.Any]]: sqlalchemy.dialects.postgresql.JSONB,
             }
+
+    def array(self, item_type):
+        return self.ARRAY(item_type)

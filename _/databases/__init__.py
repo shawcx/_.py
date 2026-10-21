@@ -6,6 +6,7 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import base64
 import logging
 import typing
 
@@ -18,6 +19,50 @@ try:
     from sqlalchemy.ext.asyncio import AsyncSession,create_async_engine
 except ImportError:
     raise _.error('Missing sqlalchemy module')
+
+
+class UInt64(sqlalchemy.types.TypeDecorator):
+    '''unsigned 64-bit integer: NUMERIC(20) on Postgres, otherwise stored in
+       a BIGINT as its two's complement so values of 2**63 and up fit'''
+    impl     = sqlalchemy.BIGINT
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(sqlalchemy.NUMERIC(20, 0))
+        return dialect.type_descriptor(sqlalchemy.BIGINT())
+
+    def process_bind_param(self, value, dialect):
+        if value is None or dialect.name == 'postgresql':
+            return value
+        return value - (1 << 64) if value >= (1 << 63) else value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == 'postgresql':
+            return int(value)
+        return value + (1 << 64) if value < 0 else value
+
+
+class JSONArray(sqlalchemy.types.TypeDecorator):
+    'list stored as JSON for databases without arrays, bytes as base64'
+    impl     = sqlalchemy.JSON
+    cache_ok = True
+
+    def __init__(self, binary=False):
+        super().__init__()
+        self.binary = binary
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and self.binary:
+            value = [base64.b64encode(v).decode('ascii') for v in value]
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and self.binary:
+            value = [base64.b64decode(v) for v in value]
+        return value
 
 
 class Database:
@@ -46,6 +91,10 @@ class Database:
         logging.debug('Database URL: %s: %s', component_name, url)
         self.engine = create_async_engine(url, echo=False)
         self.session = sqlalchemy.orm.sessionmaker(self.engine, class_=AsyncSession)
+
+    def array(self, item_type):
+        'column type for a list of item_type, overridden by databases with arrays'
+        return JSONArray(binary=isinstance(item_type, sqlalchemy.LargeBinary))
 
     async def create_tables(self):
         try:

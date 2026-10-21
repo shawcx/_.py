@@ -36,7 +36,9 @@ Tests: set up with `uv venv && uv pip install -e '.[test]'`, then `make test PYT
 
 **Records** (`_/records/`). These turn user modules into SQLAlchemy tables plus REST handlers at `/records/<component>(?:/(.*))?` via `HandlerInterface`. Content negotiation uses `?type=json` or binary.
 - `data.py`: plain classes become dataclasses. Decorators and fields: `_.<name>.pkey()`, `uniq()`, `refs()`, `no_table`, `no_handler`, `handles(cls)` for a custom handler. Fields typed as classes become child tables with a cascading FK. Without a `pkey()`, a `<name>_id` autoincrement key is added.
-- `protobuf.py`: walks `*_pb2` modules. Custom options come from `_/records/Protobuf.proto`; the app compiles its own copy (see `skeleton/Makefile`) and names it with `options =`. The `relational` and `handlers` INI flags control table style and handler creation. Generated `*_pb2.py` files are build outputs, not source.
+- `protobuf.py`: walks the `*_pb2` modules and subpackages inside the configured package. Custom options come from `_/records/Protobuf.proto`; the app compiles its own copy (see `skeleton/Makefile`) and names it with `options =`. The `relational` and `handlers` INI flags control table style and handler creation. Generated `*_pb2.py` files are build outputs, not source.
+  - Storage: singular scalars get native columns, and `uint64` uses `_.databases.UInt64`. Repeated scalars use `db.array()`: `ARRAY` on Postgres, a JSON list elsewhere. Maps are always JSON. Messages are JSON in proto3 JSON form, or child tables `<Parent>_<field>` when `relational`; repeated children are kept in order by a `_position` column.
+  - Conversion goes through real protobuf messages (`_assign_pb` and `_fill_pb`). Child table classes live in `_proto_children`.
 
 **Logins** register handlers at `/login/<component>` and add `/login` and `/logout`. On success they call `application.on_<component>_login_success`, or the generic `on_login_success`, which must return a session dict containing `session_id`; it's saved through `_.sessions`.
 
