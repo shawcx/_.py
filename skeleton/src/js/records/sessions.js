@@ -5,7 +5,7 @@ var Backbone = require('backbone')
 class Sessions {
     static Model = Backbone.Model.extend({
         idAttribute: 'session_id',
-        urlRoot:     '/records/sessions/',
+        urlRoot:     '/sessions/dbcache/',
     })
 
     static Collection = Backbone.Collection.extend({

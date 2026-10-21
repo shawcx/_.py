@@ -6,7 +6,7 @@ SASS       = ./node_modules/.bin/sass
 
 STATIC_ROOT = ../skeleton/static
 
-JS_FILES := $(wildcard js/*.js)
+JS_FILES := $(wildcard js/*.js js/*/*.js)
 JS_FILE   = js/skeleton.js
 JS_OUT    = $(STATIC_ROOT)/$(JS_FILE)
 

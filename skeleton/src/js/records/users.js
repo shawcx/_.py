@@ -5,7 +5,7 @@ var Backbone = require('backbone')
 class Users {
     static Model = Backbone.Model.extend({
         idAttribute: 'username',
-        urlRoot:     '/records/users/',
+        urlRoot:     '/logins/dblogin/',
     })
 
     static Collection = Backbone.Collection.extend({

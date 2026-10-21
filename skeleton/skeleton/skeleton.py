@@ -49,7 +49,7 @@ class Skeleton(_.WebApplication):
         data = r._as_binary()
         print('BINARY:', data)
         x = _.proto.Reports._from_binary(data)
-        x.single['count2'] = 10
+        x.single['count'] = 11
         x.Reports_id = 35
         print(x)
 
