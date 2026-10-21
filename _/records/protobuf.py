@@ -17,7 +17,6 @@ import types
 import typing
 
 import sqlalchemy
-import sqlalchemy.ext.orderinglist
 import tornado.web
 import google.protobuf.descriptor
 import google.protobuf.message
@@ -311,11 +310,9 @@ class Protobuf(_.records.Record):
                 ordering = {}
                 if _repeated(field):
                     annotations[attr] = sqlalchemy.orm.Mapped[list[ref_table_name]]
-                    # keep repeated children in the order they were given
-                    ordering = dict(
-                        order_by         = f'{ref_table_name}._position',
-                        collection_class = sqlalchemy.ext.orderinglist.ordering_list('_position'),
-                        )
+                    # keep repeated children in the order they were given, _before_save
+                    # numbers them; not ordering_list, as session.merge() resets it
+                    ordering = dict(order_by=f'{ref_table_name}._position')
                 else:
                     annotations[attr] = sqlalchemy.orm.Mapped[typing.Optional[ref_table_name]]
                 members[attr] = sqlalchemy.orm.relationship(
@@ -472,6 +469,18 @@ class ProtoInterface(_.records.RecordsInterface):
     # attribute to field name where they differ, e.g. from_ for from
     _proto_renamed = {}
 
+    def _before_save(self):
+        '''called by the database before an insert or merge, numbers repeated
+           children by their place in the list so they load in that order'''
+        loaded = sqlalchemy.inspect(self).dict if hasattr(self, '__table__') else {}
+        for name in self._proto_children:
+            children = loaded.get(_attr(name))
+            if isinstance(children, list):
+                for index,child in enumerate(children):
+                    child._position = index
+            for child in children if isinstance(children, list) else [children] if children else []:
+                child._before_save()
+
     def _check_required(self):
         for name in self._proto_required:
             if getattr(self, _attr(name), None) is None:
@@ -538,20 +547,31 @@ class ProtoInterface(_.records.RecordsInterface):
         return pb
 
     def _as_dict(self):
-        # not dataclasses.asdict, which empties ordering_list collections when it
-        # rebuilds them, and with the .proto field names, e.g. from not from_
-        _dict = {}
-        for field in dataclasses.fields(self):
-            value = getattr(self, field.name)
-            if isinstance(value, ProtoInterface):
-                value = value._as_dict()
-            elif isinstance(value, list):
-                value = [v._as_dict() if isinstance(v, ProtoInterface) else v for v in value]
-            _dict[self._proto_renamed.get(field.name, field.name)] = value
-        if hasattr(self, '__primary_key__'):
-            key = self.__primary_key__
-            _dict[self._proto_renamed.get(key, key)] = getattr(self, key)
+        '''the proto3 JSON form of the record, plus a generated primary key so
+           clients can address it'''
+        _dict = _json_form(self._as_pb())
+        key = self._generated_key()
+        if key:
+            _dict[key] = getattr(self, key, None)
         return _dict
+
+    @classmethod
+    def _generated_key(cls):
+        'the primary key when it is a column the message lacks, e.g. order_id'
+        key = getattr(cls, '__primary_key__', None)
+        if key is None or key in {_attr(f.name) for f in cls.__pb.DESCRIPTOR.fields}:
+            return None
+        return key
+
+    @classmethod
+    def _split_key(cls, msg):
+        '''take a generated primary key out of a dict before it is parsed into
+           the message, so a record's own _as_dict output can be read back'''
+        key = cls._generated_key()
+        if not key or not isinstance(msg, dict) or key not in msg:
+            return msg,None,None
+        msg = dict(msg)
+        return msg,key,msg.pop(key)
 
     @classmethod
     def _parse(cls, parse, *args):
@@ -563,17 +583,23 @@ class ProtoInterface(_.records.RecordsInterface):
         return pb
 
     def __call__(self, *args, **kwds):
-        msg = args[0] if args else kwds
-        return self._assign_pb(self._parse(google.protobuf.json_format.ParseDict, msg))
+        msg,key,value = self._split_key(args[0] if args else kwds)
+        self._assign_pb(self._parse(google.protobuf.json_format.ParseDict, msg))
+        if key:
+            setattr(self, key, value)
+        return self
 
     @classmethod
     def _from_dict(cls, *args, **kwds):
-        msg = args[0] if args else kwds
-        return cls()._assign_pb(cls._parse(google.protobuf.json_format.ParseDict, msg))
+        return cls()(*args, **kwds)
 
     @classmethod
     def _from_json(cls, msg):
-        return cls()._assign_pb(cls._parse(google.protobuf.json_format.Parse, msg))
+        try:
+            msg = json.loads(msg)
+        except ValueError as e:
+            raise _.error('%s', e) from None
+        return cls._from_dict(msg)
 
     @classmethod
     def _from_binary(cls, packed):

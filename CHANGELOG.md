@@ -6,6 +6,12 @@ Unreleased
 
 ### Upgrading
 
+- **JSON output of protobuf records** (`_as_dict`, `_as_json` and the REST
+  handlers) is now the proto3 JSON form throughout: 64-bit integers as
+  strings, enums by name, timestamps in RFC 3339, durations such as
+  `"90.5s"`, bytes as base64. Unset optional and message fields are left
+  out, and relational child records no longer include their internal ids.
+  A generated primary key such as `order_id` is still included.
 - **Protobuf well-known types** get native columns, so existing tables
   differ and the startup check prints the SQL. In JSON mode a JSON
   `Timestamp` column becomes `TIMESTAMPTZ`, a type change you apply by
@@ -27,6 +33,9 @@ Unreleased
   - `Struct`, `Value` and `ListValue` become JSON columns holding plain
     dicts, values and lists.
   - Repeated well-known types are stored as JSON in proto3 JSON form.
+- A protobuf record's own JSON output can be read back with `_from_dict`,
+  generated primary key included, so a REST client can PUT back what it got
+  from GET to update a record.
 - Protobuf fields named after Python keywords, such as `from` or `class`,
   are supported: the record attribute is `from_`, while the column, the
   message and the JSON output keep `from`.
@@ -44,6 +53,8 @@ Unreleased
 - In 0.9.0 the JSON output of relational protobuf records (`_as_dict`,
   `_as_json` and the REST handlers) left repeated child records out; the
   data was stored and read correctly.
+- Updating a relational protobuf record (`upsert`, REST PUT) on Postgres
+  lost the order of its repeated children.
 - Relational child records are checked against their message when they're
   saved on their own, not only through their parent.
 - dblogin pointed at an unknown database crashed with a `KeyError`

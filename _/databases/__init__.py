@@ -201,6 +201,7 @@ class Database:
 
     # CREATE
     async def insert(self, *args):
+        _before_save(args)
         try:
             async with self.session() as session:
                 async with session.begin():
@@ -228,6 +229,7 @@ class Database:
 
     # UPDATE
     async def upsert(self, *args):
+        _before_save(args)
         async with self.session() as session:
             async with session.begin():
                 for obj in args:
@@ -246,6 +248,14 @@ class Database:
                     statement = sqlalchemy.delete(obj).where(column == value)
                     results = await session.execute(statement)
                     return results.rowcount
+
+
+def _before_save(records):
+    'let records prepare themselves, e.g. number their children, before an insert or merge'
+    for record in records:
+        hook = getattr(record, '_before_save', None)
+        if hook:
+            hook()
 
 
 def _plan_schema(conn, metadata):

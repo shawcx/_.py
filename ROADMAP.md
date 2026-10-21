@@ -7,9 +7,6 @@ Protobuf records
 - **Unused options in `Protobuf.proto`.** `refs`, `paired` and `subtype`
   are declared but have no effect; their intended behaviour still needs
   defining.
-- **Consistent JSON API output.** Top-level 64-bit integers are JSON
-  numbers and enums are numbers, but nested ones use proto3 JSON form
-  (strings and names). Pick one form for the whole record.
 
 Smaller items
 -------------

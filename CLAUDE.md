@@ -50,6 +50,8 @@ Tests: set up with `uv venv && uv pip install -e '.[test,protobuf,postgres]'`, t
   - Field options: `(pkey)` primary key, `(uniq)` unique, `(required)` NOT NULL and checked before saving, `(no_column)` kept in the message but not stored, `(ref) = "Table.column"` foreign key. Message option `(id) = 'name'` names an auto-increment key, and `(no_table)` and `(no_handler)` skip the table or route. `refs`, `paired` and `subtype` are declared but unused.
   - A field named after a Python keyword (`from`) is attribute `from_` on the record (`_attr()`). The column, the message and `_as_dict()` keep `from`.
   - Every table, relational child tables included, is checked by `_validate` before insert or update: required fields, and conversion to its message.
+  - `_as_dict()` (and so `_as_json()` and the REST handlers) is the proto3 JSON form of the record's message, plus a generated primary key such as `order_id`. `_from_dict()` accepts that key back, so a REST client can PUT what it got from GET.
+  - Repeated relational children are numbered by `_before_save()`, which `Database.insert` and `upsert` call before `add` or `merge`. Don't use `ordering_list`: `session.merge()` resets its positions.
   - Conversion goes through real protobuf messages (`_assign_pb` and `_fill_pb`). Child table classes live in `_proto_children`.
 
 **Logins** register handlers at `/login/<component>` and add `/login` and `/logout`. On success they call `application.on_<component>_login_success`, or the generic `on_login_success`, which must return a session dict containing `session_id`; it's saved through `_.sessions`. dblogin stores salted scrypt hashes (`_.auth.hash_password`). Older `simple_hash` passwords still verify and are rehashed on the next successful login.

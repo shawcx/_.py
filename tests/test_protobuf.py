@@ -223,6 +223,10 @@ APP = '''
             empty = await db.find_one(pb.Event, 'empty')
             out['event_empty'] = [empty.count, empty.note, empty.at]
             out['event_json'] = json.loads(event._as_json())['took']
+            out['json_output'] = dict(
+                everything = json.loads(loaded._as_json()),
+                event      = json.loads(event._as_json()),
+                )
             def event_columns(conn):
                 inspector = sqlalchemy.inspect(conn)
                 return {c['name']: str(c['type']) for c in inspector.get_columns('Event')}, inspector.get_table_names()
@@ -289,6 +293,17 @@ APP = '''
             await db.insert(pb.Order._from_dict(ORDER))
             order = (await db.find(pb.Order))[0]
             out['order'] = as_json(order._as_pb()) == expected(pbt.Test_pb2.Order, ORDER)
+            # a record's JSON output reads back in, updating it by its generated key
+            out['order_dict'] = order._as_dict()
+            again = pb.Order._from_dict(order._as_dict())
+            again.customer = 'd'
+            await db.upsert(again)
+            orders = await db.find(pb.Order)
+            out['order_update'] = [(o.order_id, o.customer) for o in orders]
+            # updating replaces the children, which must keep their order
+            out['order_update_lines'] = [line['sku'] for line in orders[0]._as_dict()['lines']]
+            order = orders[0]
+
             # changing only a child row is checked too
             if _.config.getboolean('pb', 'relational'):
                 order.lines[0].sku = None
@@ -398,15 +413,38 @@ def test_protobuf_records(run_proto_app, relational):
         blobs  = ['6869', ''],
         # enums are stored as numbers
         color  = 1,
-        # nested messages are child records in relational mode,
-        # otherwise they are held in proto3 JSON form
-        addr   = (dict(city='x', code='', big=0, Everything_addr_id=1) if relational
-                  else {'city': 'x', 'code': '', 'big': '0'}),
+        # nested messages are child records in relational mode, otherwise
+        # they are held in proto3 JSON form; either way they print in that form
+        addr   = dict({'city': 'x', 'code': '', 'big': '0'}, **({'Everything_addr_id': 1} if relational else {})),
         # unset messages and optional fields are None
         unset  = None,
         maybe  = None,
         places = {'home': {'city': 'c', 'code': 'AQ==', 'big': '9007199254740993'}},
         )
+
+    # JSON output is the proto3 JSON form
+    everything = out['json_output']['everything']
+    assert everything['huge'] == str(2**64 - 1)
+    assert everything['bigs'] == [str(2**64 - 1), '1']
+    assert everything['color'] == 'GREEN'
+    assert everything['blob'] == 'AAE='
+    assert everything['places'] == {'home': {'city': 'c', 'code': 'AQ==', 'big': '9007199254740993'}}
+    # unset messages and optional fields are left out
+    assert 'unset' not in everything and 'maybe' not in everything
+    event = out['json_output']['event']
+    assert event['at'] == '2024-05-01T12:00:00.123456Z'
+    assert event['count'] == '0' and event['big'] == str(2**64 - 1)
+    assert event['meta'] == {'tags': ['a', 1], 'ok': True}
+    assert 'unset' not in event
+    # a generated key is included, child records have no ids
+    assert out['order_dict'] == dict(
+        customer = 'c',
+        lines    = [dict(sku='s1', qty=1, origin={'city': 'f', 'code': '', 'big': '0'}), dict(sku='s2', qty=2)],
+        ship     = {'city': 'y', 'code': '', 'big': '0'},
+        order_id = 1,
+        )
+    assert out['order_update'] == [[1, 'd']]
+    assert out['order_update_lines'] == ['s1', 's2']
 
     assert out['event'] is True
     assert out['event_values'] == dict(
@@ -423,7 +461,7 @@ def test_protobuf_records(run_proto_app, relational):
         blob  = '0001',
         )
     assert out['event_empty'] == [None, None, None]
-    assert out['event_json'] == 90.5
+    assert out['event_json'] == '90.500s'
     columns = out['event_columns']['columns']
     assert columns['at'] in ('TIMESTAMP', 'DATETIME')
     assert columns['took'] in ('INTERVAL', 'DATETIME')
@@ -502,6 +540,7 @@ def proto_server(tmp_path):
             message Greeting { option (no_table) = true; string text = 1; }
             message Plain    { option (no_table) = true; string text = 1; }
             message Thing    { string name = 1 [(pkey) = true]; }
+            message Counter  { string label = 1; int64 total = 2; }
             ''',
         'pbw/__init__.py'   : '''
             from . import Web_pb2
@@ -606,3 +645,18 @@ def test_protobuf_subpackage_routes(proto_server):
     with sqlite3.connect(proto_server.directory / 'web.db') as conn:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {'Thing', 'sub_Thing'} <= tables
+
+
+def test_protobuf_rest_round_trip(proto_server):
+    body = json.dumps(dict(label='hits', total=5)).encode()
+    assert proto_server.request('POST', '/web/Counter', body)[0] == 204
+    code,body = proto_server.request('GET', '/web/Counter/1')
+    record = json.loads(body)
+    # proto3 JSON form with the generated key
+    assert (code, record) == (200, dict(label='hits', total='5', Counter_id=1))
+
+    # what GET returned can be edited and sent back to update the record
+    record['total'] = '6'
+    assert proto_server.request('PUT', '/web/Counter/1', json.dumps(record).encode())[0] == 204
+    code,body = proto_server.request('GET', '/web/Counter')
+    assert json.loads(body) == dict(data=[dict(label='hits', total='6', Counter_id=1)])
