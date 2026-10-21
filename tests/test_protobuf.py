@@ -69,6 +69,18 @@ PROTO = '''
         option (no_table) = true;
         repeated string tags = 1;
     }
+
+    message Owner {
+        string name = 1 [(pkey) = true];
+    }
+
+    message Pet {
+        string         name    = 1 [(pkey) = true];
+        string         owner   = 2 [(ref) = "Owner.name"];
+        optional int32 age     = 3 [(required) = true];
+        Address        home    = 4 [(required) = true];
+        string         scratch = 5 [(no_column) = true];
+    }
     '''
 
 APP = '''
@@ -144,6 +156,41 @@ APP = '''
                 except _.error as e:
                     out['invalid'] = 'rejected' if 'nope' in str(e) else str(e)
                 out['invalid_stored'] = await db.find_one(pb.Everything, 'bad') is not None
+
+            # required, ref and no_column options
+            await db.insert(pb.Owner._from_dict(dict(name='alice')))
+            pet = dict(name='rex', owner='alice', age=3, home={'city': 'x'}, scratch='kept')
+            async def attempt(**changes):
+                value = {k:v for k,v in dict(pet, **changes).items() if v is not None}
+                try:
+                    await db.insert(pb.Pet._from_dict(value))
+                    return 'stored'
+                except _.error as e:
+                    return str(e)
+            out['pet'] = dict(
+                ok        = await attempt(),
+                bad_owner = await attempt(name='a', owner='nobody'),
+                no_age    = await attempt(name='b', age=None),
+                no_home   = await attempt(name='c', home=None),
+                )
+            def table_info(conn):
+                inspector = sqlalchemy.inspect(conn)
+                columns = {c['name']: c['nullable'] for c in inspector.get_columns('Pet')}
+                fks = [(fk['referred_table'], fk['referred_columns']) for fk in inspector.get_foreign_keys('Pet')]
+                return columns, fks
+            async with db.engine.connect() as conn:
+                columns,fks = await conn.run_sync(table_info)
+            out['pet_columns'] = dict(
+                stored    = sorted(columns),
+                age_null  = columns['age'],
+                home_null = columns.get('home'),
+                fks       = fks,
+                )
+            loaded = await db.find_one(pb.Pet, 'rex')
+            out['scratch'] = dict(
+                binary = pb.Pet._from_binary(pb.Pet._from_dict(pet)._as_binary()).scratch,
+                stored = loaded._as_pb().scratch,
+                )
 
             # nested messages convert from dicts in both modes
             await db.insert(pb.Order._from_dict(ORDER))
@@ -257,6 +304,21 @@ def test_protobuf_records(run_proto_app, relational):
         maybe  = None,
         places = {'home': {'city': 'c', 'code': 'AQ==', 'big': '9007199254740993'}},
         )
+
+    pet = out['pet']
+    assert pet['ok'] == 'stored'
+    # the database refuses an owner that doesn't exist
+    assert 'foreign key' in pet['bad_owner'].lower()
+    assert pet['no_age'] == 'Pet.age is required'
+    assert pet['no_home'] == 'Pet.home is required'
+    # no_column fields aren't stored, required ones are NOT NULL
+    stored = sorted(['age', 'name', 'owner'] + ([] if relational else ['home']))
+    assert out['pet_columns']['stored'] == stored
+    assert out['pet_columns']['age_null'] is False
+    assert out['pet_columns']['home_null'] is (None if relational else False)
+    assert out['pet_columns']['fks'] == [['Owner', ['name']]]
+    # but they're kept in the message
+    assert out['scratch'] == dict(binary='kept', stored='')
 
     if not relational:
         assert out['invalid'] == 'rejected'

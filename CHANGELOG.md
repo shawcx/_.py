@@ -1,6 +1,17 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+### Added
+
+- Protobuf field options that were declared but ignored now work:
+  - `(required)` makes the column NOT NULL and refuses to store a record
+    with the field unset, including fields on relational child records.
+  - `(no_column)` keeps the field in the message but doesn't store it.
+  - `(ref) = "Table.column"` adds a foreign key.
+
 0.9.0
 -----
 

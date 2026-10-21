@@ -4,14 +4,9 @@ Roadmap
 Protobuf records
 ----------------
 
-- **Unused options in `Protobuf.proto`.** These are declared but have no
-  effect:
-  - `required`: a NOT NULL column.
-  - `no_column`: keep the field in the message but don't store it.
-  - `ref`: a foreign key to another table's column. It currently prints
-    `TODO: FKEY`.
-  - `refs`, `paired` and `subtype`: the intended behaviour still needs
-    defining.
+- **Unused options in `Protobuf.proto`.** `refs`, `paired` and `subtype`
+  are declared but have no effect; their intended behaviour still needs
+  defining.
 - **Field names that are Python keywords** such as `from` or `class` raise
   an error, because record fields are Python attributes. Store them as
   `from_` while keeping the column and message name `from`.

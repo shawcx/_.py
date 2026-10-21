@@ -186,9 +186,22 @@ class Protobuf(_.records.Record):
         _check_names(descriptor)
 
         primary_key = None
+        required    = []
         # iterate over message to determine columns
         for field in descriptor.fields:
             col_options = field.GetOptions()
+            where = f'{descriptor.full_name}.{field.name}'
+
+            # the field stays in the message but isn't stored
+            if col_options.Extensions[self._options.no_column]:
+                if col_options.Extensions[self._options.pkey]:
+                    raise _.error('%s: a primary key must be stored', where)
+                continue
+
+            # unset values are refused before the record is stored
+            is_required = col_options.Extensions[self._options.required]
+            if is_required:
+                required.append(field.name)
 
             # check if column should be primary key
             is_primary_key = col_options.Extensions[self._options.pkey]
@@ -205,9 +218,15 @@ class Protobuf(_.records.Record):
             if _repeated(field) and is_primary_key:
                 raise _.error('Repeated field cannot be primary key')
 
-            # check for foreign key
+            # foreign key given as "Table.column"
+            foreign_key = []
             if col_options.HasExtension(self._options.ref):
-                print('TODO: FKEY:', col_options.Extensions[self._options.ref])
+                ref = col_options.Extensions[self._options.ref]
+                if '.' not in ref:
+                    raise _.error('%s: ref must be "Table.column", not "%s"', where, ref)
+                if _is_message(field) or _repeated(field):
+                    raise _.error('%s: only single scalar fields can have a ref', where)
+                foreign_key = [sqlalchemy.ForeignKey(ref)]
 
             if _is_message(field) and self.relational and not _is_map(field):
                 # messages become child tables, maps stay JSON
@@ -247,9 +266,11 @@ class Protobuf(_.records.Record):
             annotations[field.name] = sqlalchemy.orm.Mapped[typing.Optional[typing.Any]]
             members[field.name] = sqlalchemy.orm.mapped_column(
                 column_type,
+                *foreign_key,
                 primary_key=is_primary_key,
                 unique=unique,
                 init=False,
+                **({'nullable' : False} if is_required else {}),
                 )
 
         table_options = descriptor.GetOptions()
@@ -293,6 +314,7 @@ class Protobuf(_.records.Record):
 
         members['__primary_key__'] = primary_key
         members['_proto_children'] = {}
+        members['_proto_required'] = tuple(required)
 
         table_type = type(name, (ProtoInterface,self.db.Base,), members)
 
@@ -353,6 +375,17 @@ class ProtoInterface(_.records.RecordsInterface):
 
     # child table classes by field name, only used in relational mode
     _proto_children = {}
+    # fields marked (required) in the .proto
+    _proto_required = ()
+
+    def _check_required(self):
+        for name in self._proto_required:
+            if getattr(self, name, None) is None:
+                raise _.error('%s.%s is required', type(self).__name__, name)
+        for name in self._proto_children:
+            children = getattr(self, name, None) or []
+            for child in children if isinstance(children, list) else [children]:
+                child._check_required()
 
     def _assign_pb(self, pb):
         'set the record fields from a protobuf message'
@@ -450,7 +483,9 @@ class ProtoInterface(_.records.RecordsInterface):
 
 
 def _validate(mapper, connection, record):
-    # raises _.error when a field doesn't fit the message, e.g. an unknown nested key
+    # raises _.error when a required field is unset or a field doesn't fit
+    # the message, e.g. an unknown nested key
+    record._check_required()
     record._as_pb()
 
 
