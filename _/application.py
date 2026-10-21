@@ -28,11 +28,15 @@ class Application:
             logging.error('%s', e)
 
     async def _async_main(self, ns):
-        self.loop = asyncio.get_event_loop()
+        self.loop = asyncio.get_running_loop()
         self._stop_event = asyncio.Event()
 
-        signal.signal(signal.SIGINT,  self.__signalHandler)
-        signal.signal(signal.SIGTERM, self.__signalHandler)
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            try:
+                self.loop.add_signal_handler(signum, self.__signalHandler, signum, None)
+            except NotImplementedError:
+                # Windows event loops can't add signal handlers
+                signal.signal(signum, self.__signalHandler)
 
         name = self.__class__.__name__.lower()
         try:
@@ -126,7 +130,7 @@ class Application:
         pass
 
     def __signalHandler(self, signum, frame):
-        '''handle signals in a thread-safe way'''
+        '''handle signals in a thread-safe way, frame is None unless on Windows'''
         signame = signal.Signals(signum).name
         handler = getattr(self, f'on_{signame.lower()}', None)
         if handler:

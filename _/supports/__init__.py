@@ -20,8 +20,7 @@ class Support:
         self.root = os.path.abspath(self.root)
         await self.init(component_name, **kwds)
 
-    @classmethod
-    async def init(cls, component_name):
+    async def init(self, component_name, **kwds):
         pass
 
     @classmethod

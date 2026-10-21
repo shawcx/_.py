@@ -84,6 +84,20 @@ class RecordsInterface:
         return json.dumps(self, cls=_.JSONEncoder, separators=(',',':'), **kwds)
 
 
+def _delimited(records):
+    'prefix each record with its varint length, like a protobuf delimited stream'
+    packed = bytearray()
+    for record in records:
+        data = record._as_binary()
+        size = len(data)
+        while size > 0x7f:
+            packed.append((size & 0x7f) | 0x80)
+            size >>= 7
+        packed.append(size)
+        packed += data
+    return bytes(packed)
+
+
 class HandlerInterface(_.handlers.Protected):
     def initialize(self):
         self.content_type = self.get_argument('type', 'json')
@@ -134,7 +148,7 @@ class HandlerInterface(_.handlers.Protected):
             if self.content_type == 'json':
                 self.write(dict(data=records))
             else:
-                self.write(dict(data=records))
+                self.write(_delimited(records))
         else:
             record = await self._db.find_one(self._record, self._record_key(record_id))
             if record is None:

@@ -27,7 +27,7 @@ class Cache:
         _.caches[component_name] = self
         await self.init(component_name, **kwds)
 
-    async def init(self, **kwds):
+    async def init(self, component_name, **kwds):
         pass
 
     async def close(self):

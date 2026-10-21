@@ -92,6 +92,35 @@ def test_binary_round_trip(server):
     assert json.loads(body) == dict(name='bob', age=40)
 
 
+def unpack_delimited(packed):
+    records = []
+    while packed:
+        size = shift = 0
+        while True:
+            byte = packed[0]
+            packed = packed[1:]
+            size |= (byte & 0x7f) << shift
+            shift += 7
+            if not byte & 0x80:
+                break
+        records.append(json.loads(packed[:size]))
+        packed = packed[size:]
+    return records
+
+
+def test_binary_list(server):
+    # a 200 byte record needs a two byte varint length
+    long_name = 'n' * 200
+    for name,age in [('carol', 50), (long_name, 60)]:
+        body = json.dumps(dict(name=name, age=age)).encode()
+        assert server.request('POST', '/data/person', body)[0] == 204
+    code,body = server.request('GET', '/data/person?type=binary')
+    assert code == 200
+    records = unpack_delimited(body)
+    assert dict(name='carol', age=50) in records
+    assert dict(name=long_name, age=60) in records
+
+
 class Marker:
     path = None
 
