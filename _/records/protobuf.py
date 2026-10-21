@@ -225,7 +225,7 @@ class Protobuf(_.records.Record):
 
             if _is_message(field):
                 # messages and maps are stored in their proto3 JSON form
-                column_type = (self.db.JSON or sqlalchemy.JSON)()
+                column_type = (self.db.JSON or sqlalchemy.JSON)(none_as_null=True)
             else:
                 column_type = self._column_type(field)
                 if _repeated(field):

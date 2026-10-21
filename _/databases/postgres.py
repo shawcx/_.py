@@ -28,18 +28,11 @@ class Postgres(_.databases.Database):
     BYTES  = sqlalchemy.dialects.postgresql.BYTEA
     UUID   = sqlalchemy.dialects.postgresql.UUID
 
-    class Base(
-            sqlalchemy.ext.asyncio.AsyncAttrs,
-            sqlalchemy.orm.MappedAsDataclass,
-            sqlalchemy.orm.DeclarativeBase,
-            ):
-        'base class for _.records'
-
-        type_annotation_map = {
-            int:                         sqlalchemy.BIGINT,
-            dict[str, typing.Any]:       sqlalchemy.dialects.postgresql.JSONB,
-            list[dict[str, typing.Any]]: sqlalchemy.dialects.postgresql.JSONB,
-            }
+    TYPE_ANNOTATION_MAP = {
+        int:                         sqlalchemy.BIGINT,
+        dict[str, typing.Any]:       sqlalchemy.dialects.postgresql.JSONB,
+        list[dict[str, typing.Any]]: sqlalchemy.dialects.postgresql.JSONB,
+        }
 
     def array(self, item_type):
         return self.ARRAY(item_type)

@@ -39,9 +39,6 @@ class Record:
 
         await _.wait(self.load(imported))
 
-        if self.db:
-            await self.db.create_tables()
-
     @classmethod
     async def args(cls, component_name):
         pass

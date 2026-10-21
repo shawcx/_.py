@@ -2,6 +2,10 @@
 # _ keeps its state in module globals and parses sys.argv, so each test
 # runs its app in a separate interpreter.
 #
+# Set UNDERSCORE_TEST_POSTGRES to a URL such as
+# postgresql://user:password@127.0.0.1:5432/db to also run the database
+# tests against Postgres. They drop and recreate its public schema.
+#
 
 import os
 import signal
@@ -11,11 +15,35 @@ import sys
 import textwrap
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def backends():
+    yield 'sqlite'
+    if os.environ.get('UNDERSCORE_TEST_POSTGRES'):
+        yield 'postgres'
+
+
+def database_ini(backend, tmp_path, name='db', reset=True):
+    'the INI section for a database named name, emptied first if reset'
+    if backend == 'sqlite':
+        return f'[{name}]\ndatabase = {tmp_path}/{name}.db\n'
+    url = os.environ['UNDERSCORE_TEST_POSTGRES']
+    if reset:
+        subprocess.run(['psql', '-q', url, '-c', 'DROP SCHEMA public CASCADE; CREATE SCHEMA public'],
+            check=True, capture_output=True)
+    url = urllib.parse.urlsplit(url)
+    return (
+        f'[{name}]\n'
+        f'host = {url.hostname}\nport = {url.port or 5432}\n'
+        f'username = {url.username}\npassword = {url.password}\n'
+        f'database = {url.path.lstrip("/")}\n'
+        )
 
 
 def write_files(directory, files):
@@ -30,6 +58,8 @@ def app_env(home):
     env['PYTHONPATH'] = os.pathsep.join(filter(None, [ROOT, env.get('PYTHONPATH')]))
     # keep ~/.<name>.ini lookups inside the test
     env['HOME'] = str(home)
+    # files rewritten within a second can have the same size and mtime
+    env['PYTHONDONTWRITEBYTECODE'] = '1'
     return env
 
 

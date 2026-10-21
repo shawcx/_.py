@@ -60,18 +60,11 @@ class SQLite(_.databases.Database):
     BOOL   = sqlalchemy.dialects.sqlite.BOOLEAN
     UUID   = UUID
 
-    class Base(
-            sqlalchemy.ext.asyncio.AsyncAttrs,
-            sqlalchemy.orm.MappedAsDataclass,
-            sqlalchemy.orm.DeclarativeBase,
-            ):
-        'base class for _.records'
-
-        type_annotation_map = {
-            int:                         sqlalchemy.BIGINT,
-            dict[str, typing.Any]:       sqlalchemy.dialects.sqlite.JSON,
-            list[dict[str, typing.Any]]: sqlalchemy.dialects.sqlite.JSON,
-            }
+    TYPE_ANNOTATION_MAP = {
+        int:                         sqlalchemy.BIGINT,
+        dict[str, typing.Any]:       sqlalchemy.dialects.sqlite.JSON,
+        list[dict[str, typing.Any]]: sqlalchemy.dialects.sqlite.JSON,
+        }
 
     async def init(self, component_name, **kwds):
         logging.getLogger('aiosqlite').setLevel(logging.WARNING)

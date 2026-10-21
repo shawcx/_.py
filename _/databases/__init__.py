@@ -7,6 +7,7 @@
 #
 
 import base64
+import io
 import logging
 import typing
 
@@ -19,6 +20,8 @@ try:
     from sqlalchemy.ext.asyncio import AsyncSession,create_async_engine
 except ImportError:
     raise _.error('Missing sqlalchemy module')
+
+logging.getLogger('alembic').setLevel(logging.WARNING)
 
 
 class UInt64(sqlalchemy.types.TypeDecorator):
@@ -77,13 +80,34 @@ class Database:
     BYTES   = None
     UUID    = None
 
+    TYPE_ANNOTATION_MAP = {}
+
     @classmethod
     async def _(cls, component_name, **kwds):
         self = cls()
         self.component_name = component_name
+        # each database gets its own models and metadata
+        self.Base = self._declarative_base()
+        self.check_schema = kwds.pop('check_schema', 'true').lower() not in ('false', 'no', 'off', '0')
         _.databases[component_name] = self
         setattr(_, component_name, self)
+
+        _.argparser.add_argument(f'--{component_name}-migrate',
+            action='store_true',
+            help=f'Apply schema changes to the {component_name} database'
+            )
+
         await self.init(component_name, **kwds)
+
+    def _declarative_base(self):
+        class Base(
+                sqlalchemy.ext.asyncio.AsyncAttrs,
+                sqlalchemy.orm.MappedAsDataclass,
+                sqlalchemy.orm.DeclarativeBase,
+                ):
+            'base class for _.records'
+            type_annotation_map = self.TYPE_ANNOTATION_MAP
+        return Base
 
     async def init(self, component_name, **kwds):
         kwds['drivername'] = self.DRIVER
@@ -97,12 +121,55 @@ class Database:
         return JSONArray(binary=isinstance(item_type, sqlalchemy.LargeBinary))
 
     async def create_tables(self):
+        '''create the tables in an empty database, otherwise compare them to the
+           models and apply the changes if --<name>-migrate was given'''
         try:
             async with self.engine.begin() as conn:
-                await conn.run_sync(self.Base.metadata.create_all)
-                await conn.commit()
+                await conn.run_sync(self._sync_schema)
+        except _.error:
+            raise
         except Exception as e:
             raise _.error('Database "%s": %s', self.component_name, e) from None
+
+    def _sync_schema(self, conn):
+        metadata = self.Base.metadata
+        existing = set(sqlalchemy.inspect(conn).get_table_names())
+        if not self.check_schema or not existing & set(metadata.tables):
+            metadata.create_all(conn)
+            return
+
+        try:
+            import alembic.migration
+            import alembic.operations
+        except ImportError:
+            logging.warning('Database "%s": install alembic to check the schema', self.component_name)
+            metadata.create_all(conn)
+            return
+
+        apply,manual = _plan_schema(conn, metadata)
+        migrate = getattr(_.args, f'{self.component_name}_migrate', False)
+
+        # apply nothing unless everything can be applied, SQLite can't roll back DDL
+        if apply and migrate and not manual:
+            operations = alembic.operations.Operations(alembic.migration.MigrationContext.configure(conn))
+            for op in apply:
+                logging.info('%s: %s', self.component_name, _render_sql(conn, op))
+                operations.invoke(op)
+            return
+
+        if not apply and not manual:
+            return
+
+        lines = [f'Database "{self.component_name}" differs from the schema:']
+        lines.extend(f'  {_render_sql(conn, op)}' for op in apply)
+        if manual:
+            lines.append('These changes may lose data and must be applied by hand:')
+            lines.extend(f'  {_render_sql(conn, op)}' for op in manual)
+            if apply:
+                lines.append(f'Then run with --{self.component_name}-migrate to apply the rest')
+        else:
+            lines.append(f'Run with --{self.component_name}-migrate to apply them')
+        raise _.error('%s', '\n'.join(lines))
 
     async def close(self):
         await self.engine.dispose()
@@ -154,3 +221,62 @@ class Database:
                     statement = sqlalchemy.delete(obj).where(column == value)
                     results = await session.execute(statement)
                     return results.rowcount
+
+
+def _plan_schema(conn, metadata):
+    '''compare the database with the models using alembic autogenerate and split
+       the changes into those that are safe to apply and those that may lose data'''
+    import alembic.autogenerate
+    import alembic.migration
+    import alembic.operations.ops as ops
+
+    # ignore tables in the database that these models don't define
+    def include_name(name, type_, parent_names):
+        return type_ != 'table' or name in metadata.tables
+
+    context = alembic.migration.MigrationContext.configure(conn, opts=dict(
+        include_name = include_name,
+        compare_type = True,
+        ))
+    script = alembic.autogenerate.produce_migrations(context, metadata)
+
+    apply,manual = [],[]
+    for op in script.upgrade_ops.ops:
+        for op in op.ops if isinstance(op, ops.ModifyTableOps) else [op]:
+            if _pkey_nullable_only(metadata, op):
+                continue
+            if isinstance(op, (ops.DropTableOp, ops.DropColumnOp, ops.AlterColumnOp)):
+                manual.append(op)
+            elif isinstance(op, ops.AddColumnOp) and not (op.column.nullable or op.column.server_default):
+                # existing rows would need a value
+                manual.append(op)
+            else:
+                apply.append(op)
+    return apply,manual
+
+
+def _pkey_nullable_only(metadata, op):
+    '''primary keys are never null, but models declare them Optional and
+       SQLite only adds NOT NULL when asked, so ignore that difference'''
+    import alembic.operations.ops as ops
+
+    if not isinstance(op, ops.AlterColumnOp) or op.modify_nullable is None:
+        return False
+    if op.modify_type is not None or op.modify_server_default is not False or op.modify_name is not None:
+        return False
+    table = metadata.tables.get(op.table_name)
+    return table is not None and op.column_name in table.c and table.c[op.column_name].primary_key
+
+
+def _render_sql(conn, op):
+    'the SQL for an alembic operation, for logging and error messages'
+    import alembic.migration
+    import alembic.operations
+
+    output = io.StringIO()
+    context = alembic.migration.MigrationContext.configure(
+        dialect_name = conn.dialect.name,
+        opts         = dict(as_sql=True, output_buffer=output),
+        )
+    alembic.operations.Operations(context).invoke(op)
+    return ' '.join(output.getvalue().split()).rstrip(';')

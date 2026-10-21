@@ -1,19 +1,12 @@
-#
-# Set UNDERSCORE_TEST_POSTGRES to a URL such as
-# postgresql://user:password@127.0.0.1:5432/db to also run against Postgres.
-# The tests drop and recreate the public schema of that database.
-#
-
 import json
 import os
 import shutil
 import subprocess
 import textwrap
-import urllib.parse
 
 import pytest
 
-from conftest import ROOT
+from conftest import ROOT, backends, database_ini
 
 pytest.importorskip('google.protobuf')
 if not shutil.which('protoc'):
@@ -166,6 +159,18 @@ APP = '''
     App.main()
     '''
 
+STARTED = '''
+    import json
+    import _
+
+    class App(_.Application):
+        def initialize(self):
+            print(json.dumps('started'))
+            self.stop()
+
+    App.main()
+    '''
+
 PACKAGE = '''
     import json
     import os
@@ -174,31 +179,10 @@ PACKAGE = '''
     '''
 
 
-def backends():
-    yield 'sqlite'
-    if os.environ.get('UNDERSCORE_TEST_POSTGRES'):
-        yield 'postgres'
-
-
-def database_ini(backend, tmp_path):
-    if backend == 'sqlite':
-        return f'[databases]\ndb = sqlite\n\n[db]\ndatabase = {tmp_path}/pb.db\n'
-    url = urllib.parse.urlsplit(os.environ['UNDERSCORE_TEST_POSTGRES'])
-    reset = f'DROP SCHEMA public CASCADE; CREATE SCHEMA public'
-    subprocess.run(['psql', '-q', os.environ['UNDERSCORE_TEST_POSTGRES'], '-c', reset],
-        check=True, capture_output=True)
-    return (
-        '[databases]\ndb = postgres\n\n[db]\n'
-        f'host = {url.hostname}\nport = {url.port or 5432}\n'
-        f'username = {url.username}\npassword = {url.password}\n'
-        f'database = {url.path.lstrip("/")}\n'
-        )
-
-
 @pytest.fixture(params=list(backends()))
 def run_proto_app(request, run_app, tmp_path):
-    def _run(relational):
-        (tmp_path / 'pbt' / 'sub').mkdir(parents=True)
+    def _run(relational, reset=True, app=APP):
+        (tmp_path / 'pbt' / 'sub').mkdir(parents=True, exist_ok=True)
         shutil.copy(os.path.join(ROOT, '_', 'records', 'Protobuf.proto'), tmp_path / 'pbt')
         files = {
             'pbt/Test.proto'      : PROTO,
@@ -212,7 +196,7 @@ def run_proto_app(request, run_app, tmp_path):
             ['protoc', '-I.', '--python_out=.',
                 'pbt/Protobuf.proto', 'pbt/Test.proto', 'pbt/sub/Sub.proto'],
             cwd=tmp_path, check=True)
-        ini = database_ini(request.param, tmp_path) + textwrap.dedent(f'''
+        ini = f'[databases]\ndb = {request.param}\n\n' + database_ini(request.param, tmp_path, reset=reset) + textwrap.dedent(f'''
             [records]
             pb = protobuf
 
@@ -223,7 +207,7 @@ def run_proto_app(request, run_app, tmp_path):
             handlers   = false
             relational = {str(relational).lower()}
             ''')
-        result = run_app({'app.py' : APP, 'app.ini' : ini})
+        result = run_app({'app.py' : app, 'app.ini' : ini})
         assert result.returncode == 0, result.stderr
         lines = result.stdout.strip().splitlines()
         assert lines, result.stderr
@@ -266,3 +250,12 @@ def test_protobuf_records(run_proto_app, relational):
         # deleting by id cascades to child tables in the database
         assert out['deleted'] == 1
         assert out['orphans'] == 0
+
+
+@pytest.mark.parametrize('relational', [False, True])
+def test_protobuf_schema_matches(run_proto_app, relational):
+    # a second start compares the tables it created with the models, so any
+    # difference in how a type is reflected would refuse to start here
+    run_proto_app(relational)
+    started = run_proto_app(relational, reset=False, app=STARTED)
+    assert started == 'started'

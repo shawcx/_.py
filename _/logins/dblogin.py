@@ -67,7 +67,6 @@ class DbLogin(_.logins.Login):
             columns[col] = sqlalchemy.orm.mapped_column(init=False)
 
         table_cls = type(cls._table, (_.records.RecordsInterface,cls._db.Base,), columns)
-        await cls._db.create_tables()
 
         cls._table = table_cls
 

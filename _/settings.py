@@ -137,6 +137,11 @@ async def load(**kwds):
     _.args = _.argparser.parse_args()
 
     try:
+        # tables are created once every component has defined its models
+        for name,component in _.databases.items():
+            if not _.application._stop_event.is_set():
+                await component.create_tables()
+
         for name,component in _.records.items():
             if not _.application._stop_event.is_set():
                 await _.wait(component.args(name))

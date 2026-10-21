@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run the example app: `make -C skeleton run` (compiles protobufs with `protoc`, builds JS/CSS via npm/browserify/sass, then runs `PYTHONPATH=.. python3 -m skeleton --debug`). Needs the databases it names in `skeleton.ini` (Postgres, and Redis for the redis cache) unless you trim the INI.
 - Print the Protobuf options template: `python3 -m _.records.protobuf`
 
-Tests: set up with `uv venv && uv pip install -e '.[test]'`, then `make test PYTHON=.venv/bin/python`. For one test, run `.venv/bin/python -m pytest tests/test_records.py::test_binary_round_trip`. `_` keeps its state in module globals and parses `sys.argv`, so each test writes an app, an INI and modules into `tmp_path` and runs them in a subprocess (`run_app` and `Server` in `tests/conftest.py`). There's no linter config.
+Tests: set up with `uv venv && uv pip install -e '.[test,protobuf,postgres]'`, then `make test PYTHON=.venv/bin/python`. For one test, run `.venv/bin/python -m pytest tests/test_records.py::test_binary_round_trip`. `_` keeps its state in module globals and parses `sys.argv`, so each test writes an app, an INI and modules into `tmp_path` and runs them in a subprocess (`run_app` and `Server` in `tests/conftest.py`). Set `UNDERSCORE_TEST_POSTGRES=postgresql://user:pass@host:port/db` to also run the database tests on Postgres; this drops that database's `public` schema. There's no linter config.
 
 ## Architecture
 
@@ -24,8 +24,14 @@ Tests: set up with `uv venv && uv pip install -e '.[test]'`, then `make test PYT
 1. `_.name` defaults to the lowercased app class name; `_.paths` roots at the app module's directory joined with `ns`.
 2. INI files are merged in order: `<name>.ini`, `<name>.ini.local` (beside the app), `/etc/<ns>/<name>.ini`, `~/.<name>.ini`, then `--ini/-I`.
 3. Components load in a fixed order: `databases`, `records`, `caches`, `logins`, `supports`. Records depend on databases; the sessions cache and dblogin reference database instances by name.
-4. Args are parsed twice: once for `--ini`/`--debug`, then fully after components have added their own flags. Each component's `args()` hook runs afterwards.
-5. `WebApplication` resolves `_.sessions` from the `sessions =` key in the app's section, calls the app's `initialize()` (which sets `self.patterns`), prepends the auto-generated record and login routes, applies the optional `prefix =` for reverse proxies, and listens.
+4. Args are parsed twice: once for `--ini`/`--debug`, then fully after components have added their own flags.
+5. Each database then runs `create_tables()`, after every component has defined its models and before the `args()` hooks (dblogin's `--add-user` needs its table).
+   - An empty database is created with `create_all`.
+   - Otherwise alembic autogenerate compares the models with the database, looking only at tables the models define. Any difference stops startup.
+   - `--<db>-migrate` applies the changes that can't lose data (new tables, columns, indexes, constraints). It applies nothing if any drop, type change or NOT NULL column is needed; those are printed as SQL to run by hand.
+   - `check_schema = false` in the database's INI section skips the check.
+   - Each database instance has its own `Base`, so its own `MetaData`.
+6. `WebApplication` resolves `_.sessions` from the `sessions =` key in the app's section, calls the app's `initialize()` (which sets `self.patterns`), prepends the auto-generated record and login routes, applies the optional `prefix =` for reverse proxies, and listens.
 
 **Component loader** (`_/components.py`). For each `[databases]`, `[records]`, `[caches]`, `[logins]` or `[supports]` section:
 - Each key is an instance name. Its value is the implementation module, or the key itself when there's no value (`store = postgres`, or just `sqlite`).

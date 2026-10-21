@@ -66,8 +66,6 @@ class DbCache(_.caches.Cache):
 
         self.session_table = type(self._table, (_.records.RecordsInterface, self.db.Base,), columns)
 
-        await self.db.create_tables()
-
         # interval comes from the [sessions] section of the ini
         _.application.periodic(self._interval, self.clear_stale_sessions)
 
