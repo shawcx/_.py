@@ -1,0 +1,49 @@
+[build-system]
+requires      = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name            = "underscorepy"
+description     = "_.py library"
+readme          = "README.md"
+license         = "MIT"
+license-files   = ["LICENSE"]
+authors         = [{ name = "Matthew Shaw", email = "mshaw.cx@gmail.com" }]
+requires-python = ">=3.10"
+dynamic         = ["version"]
+dependencies    = [
+    "tornado>=6.3",
+    "sqlalchemy[asyncio]>=2",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.optional-dependencies]
+postgres   = ["asyncpg"]
+sqlite     = ["aiosqlite"]
+redis      = ["redis>=5.0.1"]
+protobuf   = ["protobuf>=5.26"]
+ldap       = ["python-ldap"]
+migrations = ["alembic"]
+test       = ["pytest", "aiosqlite", "alembic"]
+all        = ["underscorepy[postgres,sqlite,redis,protobuf,ldap,migrations]"]
+
+[project.urls]
+Homepage = "https://shaw.cx/_.py"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.dynamic]
+version = { attr = "_.version.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["_", "_.*"]
+
+[tool.setuptools.package-data]
+"_" = ["records/*.proto", "supports/nginx/*.conf", "supports/systemd/*.service"]
