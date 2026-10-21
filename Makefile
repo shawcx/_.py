@@ -1,5 +1,10 @@
+PYTHON ?= python3
+
 all:
 	@#
+
+test:
+	$(PYTHON) -m pytest tests
 
 install: all
 	pip3 install --upgrade .

@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run the example app: `make -C skeleton run` (compiles protobufs with `protoc`, builds JS/CSS via npm/browserify/sass, then runs `PYTHONPATH=.. python3 -m skeleton --debug`). Needs the databases it names in `skeleton.ini` (Postgres, and Redis for the redis cache) unless you trim the INI.
 - Print the Protobuf options template: `python3 -m _.records.protobuf`
 
-There's no test suite or linter config. `_/test.py` swaps `_.Application` for a `TestApplication` that skips binding a port, so you can import it before an app to smoke-test startup.
+Tests: set up with `uv venv && uv pip install -e '.[test]'`, then `make test PYTHON=.venv/bin/python`. For one test, run `.venv/bin/python -m pytest tests/test_records.py::test_binary_round_trip`. `_` keeps its state in module globals and parses `sys.argv`, so each test writes an app, an INI and modules into `tmp_path` and runs them in a subprocess (`run_app` and `Server` in `tests/conftest.py`). There's no linter config.
 
 ## Architecture
 
