@@ -2,6 +2,7 @@ __pycache__
 *.pyc
 *.pb.cc
 *.pb.h
+*_pb2.py
 .DS_Store
 /build
 /dist
