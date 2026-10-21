@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import shutil
 import subprocess
 import textwrap
@@ -289,12 +290,30 @@ def proto_server(tmp_path):
             ''',
         'pbw/__init__.py'   : '''
             from . import Web_pb2
+            from . import sub
             import _
 
             @_.web.handles(Web_pb2.Greeting)
             class Hello:
                 async def get(self, record_id=None):
                     self.write(f'hello {record_id}')
+            ''',
+        # same message names as the parent package
+        'pbw/sub/Sub.proto' : '''
+            syntax = "proto3";
+            package pbw.sub;
+            import "pbw/Protobuf.proto";
+            message Greeting { option (no_table) = true; string text = 1; }
+            message Thing    { string name = 1 [(pkey) = true]; string colour = 2; }
+            ''',
+        'pbw/sub/__init__.py' : '''
+            from . import Sub_pb2
+            import _
+
+            @_.web.handles(Sub_pb2.Greeting)
+            class SubHello:
+                async def get(self, record_id=None):
+                    self.write(f'sub hello {record_id}')
             ''',
         'pbo/Other.proto'   : '''
             syntax = "proto3";
@@ -305,12 +324,12 @@ def proto_server(tmp_path):
         # the options can only be defined once, so share them
         'pbo/__init__.py'   : 'from pbw import Protobuf_pb2\nfrom . import Other_pb2\n',
         }
-    (tmp_path / 'pbw').mkdir()
+    (tmp_path / 'pbw' / 'sub').mkdir(parents=True)
     (tmp_path / 'pbo').mkdir()
     shutil.copy(os.path.join(ROOT, '_', 'records', 'Protobuf.proto'), tmp_path / 'pbw')
     for name,content in files.items():
         (tmp_path / name).write_text(textwrap.dedent(content))
-    subprocess.run(['protoc', '-I.', '--python_out=.', 'pbw/Protobuf.proto', 'pbw/Web.proto', 'pbo/Other.proto'],
+    subprocess.run(['protoc', '-I.', '--python_out=.', 'pbw/Protobuf.proto', 'pbw/Web.proto', 'pbw/sub/Sub.proto', 'pbo/Other.proto'],
         cwd=tmp_path, check=True)
     server = Server(tmp_path, {
         'app.py'  : WEB_APP,
@@ -342,6 +361,7 @@ def proto_server(tmp_path):
             options  = Protobuf
             ''',
         })
+    server.directory = tmp_path
     yield server
     server.stop()
 
@@ -355,3 +375,19 @@ def test_protobuf_handler_routes(proto_server):
     # messages without a table only get a route from a custom handler
     assert proto_server.request('GET', '/web/Plain')[0] == 404
     assert proto_server.request('GET', '/web/Thing') == (200, b'{"data": []}')
+
+
+def test_protobuf_subpackage_routes(proto_server):
+    # subpackage messages have their own routes and tables
+    assert proto_server.request('GET', '/web/sub/Greeting/x') == (200, b'sub hello x')
+    assert proto_server.request('GET', '/web/Greeting/x') == (200, b'hello x')
+
+    thing = json.dumps(dict(name='a', colour='red')).encode()
+    assert proto_server.request('POST', '/web/sub/Thing', thing)[0] == 204
+    code,body = proto_server.request('GET', '/web/sub/Thing/a')
+    assert code == 200 and json.loads(body)['colour'] == 'red'
+    assert proto_server.request('GET', '/web/Thing/a')[0] == 404
+
+    with sqlite3.connect(proto_server.directory / 'web.db') as conn:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {'Thing', 'sub_Thing'} <= tables

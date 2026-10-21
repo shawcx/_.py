@@ -104,8 +104,11 @@ class Protobuf(_.records.Record):
         except AttributeError:
             raise _.error('Cannot find protobuf module "%s"', self._options_name)
         self._package = module.__name__
+        # container path of the subpackage being loaded, e.g. ['sub']
+        self._path = []
         self.load_module(module)
         del self._module_name
+        del self._path
 
     def load_module(self, module):
         self._module_name = module.__name__
@@ -131,7 +134,9 @@ class Protobuf(_.records.Record):
                     self._container[member_name] = ProtobufContainer(self._container.handlers)
                     stash = (self._container,self._module_name)
                     self._container = self._container[member_name]
+                    self._path.append(member_name)
                     self.load_module(member)
+                    self._path.pop()
                     (self._container,self._module_name) = stash
                 continue
 
@@ -140,9 +145,14 @@ class Protobuf(_.records.Record):
                 message = getattr(member, name)
                 options = message.DESCRIPTOR.GetOptions()
 
+                # subpackage messages get their own tables and routes,
+                # pbt.sub.Tags is table sub_Tags served at /<component>/sub/Tags
+                table_name = '_'.join(self._path + [name])
+                route      = '/'.join(self._path + [name])
+
                 _check_names(message.DESCRIPTOR)
                 if self.db and not options.Extensions[self._options.no_table]:
-                    record_type = self._proto_table(name, message=message)
+                    record_type = self._proto_table(table_name, message=message)
                 else:
                     # declare the message fields so _as_dict has something to return
                     fields = message.DESCRIPTOR.fields
@@ -156,7 +166,7 @@ class Protobuf(_.records.Record):
                 self._container[name] = record_type
 
                 if self.handlers and not options.Extensions[self._options.no_handler]:
-                    self._proto_handler(name, record_type, module.__name__, message.DESCRIPTOR.full_name)
+                    self._proto_handler(route, record_type, module.__name__, message.DESCRIPTOR.full_name)
 
     def _proto_table(self, name, message=None, descriptor=None, parent=None, parent_key=None, parent_col=None, ordered=False):
         child_tables = {}
@@ -293,23 +303,23 @@ class Protobuf(_.records.Record):
 
         return table_type
 
-    def _proto_handler(self, name, record_type, module_name, full_name):
+    def _proto_handler(self, route, record_type, module_name, full_name):
         ## check if a custom handler was defined
         proto_handler = self._container.handlers.get(full_name)
         # the default handler needs a table
         if not proto_handler and not hasattr(record_type, '__table__'):
             return
 
-        handler_name = name
+        handler_name = route.replace('/', '_')
         if proto_handler:
             handler_name = proto_handler.__name__
             module_name = proto_handler.__module__
         types = [proto_handler] if proto_handler else [_.records.HandlerInterface]
         types.append(tornado.web.RequestHandler)
 
-        # served at the message name, whichever handler class is used
+        # served at the message's route, whichever handler class is used
         record_handler = type(handler_name, tuple(types), {
-            '_component' : name,
+            '_component' : route,
             '_db'        : self.db,
             '_record'    : record_type,
             '__module__' : module_name,
