@@ -15,6 +15,7 @@ import logging
 import os
 import types
 import typing
+import uuid
 
 import sqlalchemy
 import tornado.web
@@ -232,6 +233,7 @@ class Protobuf(_.records.Record):
                     members['_ProtoInterface__pb'] = message
                     members['_proto_children'] = {}
                     members['_proto_renamed'] = _renamed(message.DESCRIPTOR)
+                    members['_proto_uuids']   = self._uuid_fields(message.DESCRIPTOR)
                     record_type = type(name, (ProtoInterface,), members)
                     record_type = dataclasses.dataclass(init=False, kw_only=True)(record_type)
 
@@ -260,6 +262,9 @@ class Protobuf(_.records.Record):
 
         primary_key = None
         required    = []
+        uuids       = self._uuid_fields(descriptor)
+        # (paired) groups, {group: [(column, uniq), ...]}
+        groups      = {}
         # iterate over message to determine columns
         for field in descriptor.fields:
             col_options = field.GetOptions()
@@ -287,6 +292,15 @@ class Protobuf(_.records.Record):
 
             # check if column should be unique
             unique = col_options.Extensions[self._options.uniq]
+
+            # fields sharing a (paired) group get one composite index, or a
+            # unique constraint when they're all (uniq)
+            group = col_options.Extensions[self._options.paired]
+            if group:
+                if _is_message(field) and self.relational and not _is_map(field) and not _is_wkt_message(field):
+                    raise _.error("%s: a field stored as a child table can't be paired", where)
+                groups.setdefault(group, []).append((field.name, unique))
+                unique = False
 
             if _is_message(field) and is_primary_key:
                 raise _.error('Message type cannot be primary key')
@@ -329,6 +343,8 @@ class Protobuf(_.records.Record):
             if kind:
                 # well-known types get native columns
                 column_type = self._wkt_column_type(kind, field)
+            elif field.name in uuids:
+                column_type = sqlalchemy.Uuid()
             elif _is_message(field):
                 # messages and maps are stored in their proto3 JSON form
                 column_type = (self.db.JSON or sqlalchemy.JSON)(none_as_null=True)
@@ -392,6 +408,16 @@ class Protobuf(_.records.Record):
 
         members['__primary_key__'] = primary_key
         members['_proto_children'] = {}
+        members['_proto_uuids']    = uuids
+
+        indexes,uniques = {},{}
+        for group,columns in groups.items():
+            flags = {flag for column,flag in columns}
+            if len(flags) > 1:
+                raise _.error('%s: paired group "%s" mixes (uniq) and other fields', descriptor.full_name, group)
+            (uniques if flags.pop() else indexes)[group] = [column for column,flag in columns]
+        if indexes or uniques:
+            members['__table_args__'] = _.records.group_args(name, indexes, uniques)
         members['_proto_required'] = tuple(required)
         members['_proto_renamed']  = _renamed(descriptor)
 
@@ -435,6 +461,21 @@ class Protobuf(_.records.Record):
 
         _.application._record_handler(self.component_name, record_handler)
 
+    def _uuid_fields(self, descriptor):
+        '''names of the fields marked (subtype) = "uuid", checked'''
+        uuids = set()
+        for field in descriptor.fields:
+            subtype = field.GetOptions().Extensions[self._options.subtype]
+            if not subtype:
+                continue
+            where = f'{descriptor.full_name}.{field.name}'
+            if subtype != 'uuid':
+                raise _.error('%s: unknown subtype "%s", only "uuid" is supported', where, subtype)
+            if field.type != field.TYPE_STRING or _repeated(field):
+                raise _.error('%s: subtype "uuid" needs a single string field', where)
+            uuids.add(field.name)
+        return frozenset(uuids)
+
     def _wkt_column_type(self, kind, field):
         if kind == 'timestamp':
             return _.databases.UTCDateTime()
@@ -469,6 +510,8 @@ class ProtoInterface(_.records.RecordsInterface):
     _proto_required = ()
     # attribute to field name where they differ, e.g. from_ for from
     _proto_renamed = {}
+    # string fields held as uuid.UUID, from (subtype) = "uuid"
+    _proto_uuids = frozenset()
 
     def _before_save(self):
         '''called by the database before an insert or merge, numbers repeated
@@ -517,6 +560,12 @@ class ProtoInterface(_.records.RecordsInterface):
             elif field.has_presence and not pb.HasField(field.name):
                 # optional and oneof fields that were not set
                 value = None
+            elif field.name in self._proto_uuids:
+                # an empty string is an unset UUID
+                try:
+                    value = uuid.UUID(value) if value else None
+                except ValueError:
+                    raise _.error('%s.%s: "%s" is not a UUID', type(self).__name__, field.name, value) from None
             setattr(self, _attr(field.name), value)
         return self
 
@@ -541,6 +590,8 @@ class ProtoInterface(_.records.RecordsInterface):
                     value._fill_pb(getattr(pb, field.name))
             elif _repeated(field):
                 getattr(pb, field.name).extend(_scalar(field, v) for v in value)
+            elif field.name in self._proto_uuids:
+                setattr(pb, field.name, str(value))
             else:
                 setattr(pb, field.name, _scalar(field, value))
         if json_form:

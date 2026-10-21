@@ -56,6 +56,15 @@ Unreleased
     with the field unset, including fields on relational child records.
   - `(no_column)` keeps the field in the message but doesn't store it.
   - `(ref) = "Table.column"` adds a foreign key.
+  - `(paired) = "group"` gives the fields sharing a group name one
+    composite index, or a composite unique constraint when they're all
+    `(uniq)`, for example latitude and longitude.
+  - `(subtype) = "uuid"` stores a string field as a native UUID column, held
+    as a `uuid.UUID` on the record.
+  - The unused `refs` message option is removed; `(ref)` replaced it.
+- Data records take the same groups: `_.data.uniq('group')` for a
+  composite unique constraint and `_.data.paired('group')` for a composite
+  index. `uniq()` used to ignore its group.
 - The skeleton has a logo and favicon, drawn as SVGs in
   `skeleton/src/images`; `make images` there re-renders them.
 

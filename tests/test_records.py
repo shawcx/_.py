@@ -1,5 +1,6 @@
 import json
 import pickle
+import sqlite3
 
 import pytest
 
@@ -37,6 +38,14 @@ DATA = '''
     class custom_handler:
         async def get(self, record_id=None):
             self.write(f'hello {record_id}')
+
+    # a unique pair of columns and an indexed pair
+    class place:
+        name : str   = _.data.pkey()
+        a    : str   = _.data.uniq('ab')
+        b    : str   = _.data.uniq('ab')
+        lat  : float = _.data.paired('geo')
+        lng  : float = _.data.paired('geo')
 
     # no table and no custom handler, so nothing to serve
     @_.data.no_table
@@ -167,3 +176,18 @@ def test_custom_handler_route(server):
 
 def test_no_table_without_handler_has_no_route(server):
     assert server.request('GET', '/data/notable')[0] == 404
+
+
+
+def test_data_column_groups(server):
+    def place(name, a, b):
+        body = json.dumps(dict(name=name, a=a, b=b, lat=1.5, lng=2.5)).encode()
+        return server.request('POST', '/data/place', body)[0]
+    assert place('p1', 'x', 'y') == 204
+    # a and b may repeat on their own
+    assert place('p2', 'x', 'z') == 204
+    # but not together
+    assert place('p3', 'x', 'y') == 409
+    with sqlite3.connect(server.directory / 'records.db') as conn:
+        sql = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'ix_place_geo'").fetchone()[0]
+    assert 'lat, lng' in sql

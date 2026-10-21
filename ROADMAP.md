@@ -4,9 +4,6 @@ Roadmap
 Protobuf records
 ----------------
 
-- **Unused options in `Protobuf.proto`.** `refs`, `paired` and `subtype`
-  are declared but have no effect; their intended behaviour still needs
-  defining.
 
 Smaller items
 -------------

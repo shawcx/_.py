@@ -67,6 +67,8 @@ class Data(_.records.Record):
             cls = dataclasses.dataclass(init=False, kw_only=True)(cls)
 
         primary_key = None
+        # named groups of columns, {group: [column, ...]}
+        indexes,uniques = {},{}
         for field in dataclasses.fields(cls):
             # check if column should be primary key
             is_primary_key = field.metadata.get('pkey', False)
@@ -77,6 +79,14 @@ class Data(_.records.Record):
 
             uniq = field.metadata.get('uniq', False)
             refs = field.metadata.get('refs', None)
+
+            # uniq('geo') and paired('geo') group columns under a name
+            if isinstance(uniq, str):
+                uniques.setdefault(uniq, []).append(field.name)
+                uniq = False
+            paired = field.metadata.get('paired', None)
+            if paired:
+                indexes.setdefault(paired, []).append(field.name)
 
             if refs:
                 annotations[field.name] = sqlalchemy.orm.Mapped[typing.Optional[field.type]]
@@ -101,6 +111,9 @@ class Data(_.records.Record):
                     unique=uniq,
                     init=False,
                     )
+
+        if indexes or uniques:
+            members['__table_args__'] = _.records.group_args(name, indexes, uniques)
 
         if primary_key is None:
             primary_key = f'{name}_id'
@@ -226,7 +239,13 @@ class DataContainer(_.Container):
 
     @staticmethod
     def uniq(group=None, arg=dataclasses.MISSING):
-        return dataclasses.field(metadata={'uniq':True})
+        '''a unique column, or with a group name a unique group of columns'''
+        return dataclasses.field(metadata={'uniq':group or True})
+
+    @staticmethod
+    def paired(group):
+        '''columns given the same group name share one composite index'''
+        return dataclasses.field(metadata={'paired':group})
 
     @staticmethod
     def refs(table_column):

@@ -17,6 +17,14 @@ import sqlalchemy.ext.asyncio
 import _
 
 
+def group_args(table, indexes, uniques):
+    '''__table_args__ for named groups of columns, {group: [column, ...]}, as
+       composite indexes and unique constraints'''
+    args = [sqlalchemy.Index(f'ix_{table}_{group}', *columns) for group,columns in indexes.items()]
+    args += [sqlalchemy.UniqueConstraint(*columns, name=f'uq_{table}_{group}') for group,columns in uniques.items()]
+    return tuple(args)
+
+
 class Record:
     @classmethod
     async def _(cls, component_name, **kwds):

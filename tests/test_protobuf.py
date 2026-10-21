@@ -103,6 +103,16 @@ PROTO = '''
         string from = 1;
     }
 
+    message Place {
+        string name = 1 [(pkey) = true];
+        double lat  = 2 [(paired) = "geo"];
+        double lng  = 3 [(paired) = "geo"];
+        string a    = 4 [(paired) = "ab", (uniq) = true];
+        string b    = 5 [(paired) = "ab", (uniq) = true];
+        string ref  = 6 [(subtype) = "uuid"];
+        string none = 7 [(subtype) = "uuid"];
+    }
+
     message Owner {
         string name = 1 [(pkey) = true];
     }
@@ -252,6 +262,44 @@ APP = '''
                 columns = columns,
                 no_table = [pb.Keywords._from_dict({'from': 'z'}).from_,
                             json.loads(pb.Keywords._from_dict({'from': 'z'})._as_json())],
+                )
+
+            # paired groups and uuid subtype
+            import uuid
+            ref = uuid.UUID('12345678-1234-5678-1234-567812345678')
+            async def place(name, a, b, ref=str(ref)):
+                try:
+                    await db.insert(pb.Place._from_dict(dict(name=name, lat=1.5, lng=2.5, a=a, b=b, ref=ref)))
+                    return 'stored'
+                except _.error as e:
+                    return 'refused' if 'unique' in str(e).lower() else str(e)
+            def place_schema(conn):
+                inspector = sqlalchemy.inspect(conn)
+                return (
+                    {i['name']: i['column_names'] for i in inspector.get_indexes('Place')},
+                    {u['name']: u['column_names'] for u in inspector.get_unique_constraints('Place')},
+                    {c['name']: str(c['type']) for c in inspector.get_columns('Place')}['ref'],
+                    )
+            async with db.engine.connect() as conn:
+                indexes,uniques,ref_type = await conn.run_sync(place_schema)
+            loaded_place = None
+            out['place'] = dict(
+                first     = await place('p1', 'x', 'y'),
+                # same lat/lng is fine, it's only an index
+                same_geo  = await place('p2', 'x', 'z'),
+                # the same a and b together are not
+                same_ab   = await place('p3', 'x', 'y'),
+                bad_uuid  = await place('p4', 'q', 'r', ref='nope'),
+                indexes   = indexes,
+                uniques   = uniques,
+                ref_type  = ref_type,
+                )
+            loaded_place = await db.find_one(pb.Place, 'p1')
+            out['place_values'] = dict(
+                ref       = loaded_place.ref == ref,
+                ref_class = type(loaded_place.ref).__name__,
+                none      = loaded_place.none,
+                json      = json.loads(loaded_place._as_json())['ref'],
                 )
 
             # required, ref and no_column options
@@ -480,6 +528,14 @@ def test_protobuf_records(run_proto_app, relational):
     if relational:
         assert out['child_check'] == 'Order_lines.sku is required'
         assert out['child_kept'] == 's1'
+
+    place = out['place']
+    assert [place['first'], place['same_geo'], place['same_ab']] == ['stored', 'stored', 'refused']
+    assert place['bad_uuid'] == 'Place.ref: "nope" is not a UUID'
+    assert place['indexes']['ix_Place_geo'] == ['lat', 'lng']
+    assert place['uniques'] == {'uq_Place_ab': ['a', 'b']}
+    assert place['ref_type'] in ('UUID', 'CHAR(32)')
+    assert out['place_values'] == dict(ref=True, ref_class='UUID', none=None, json='12345678-1234-5678-1234-567812345678')
 
     pet = out['pet']
     assert pet['ok'] == 'stored'

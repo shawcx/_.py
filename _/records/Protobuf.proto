@@ -4,18 +4,29 @@ import "google/protobuf/descriptor.proto";
 
 
 extend google.protobuf.MessageOptions {
+    // name of an auto-increment primary key column, e.g. 'order_id'
     string id         = 50001;
+    // no database table for the message
     bool   no_table   = 50002;
+    // no REST handler for the message
     bool   no_handler = 50003;
-    string refs       = 50004;
+    // 50004 was refs, replaced by the (ref) field option; don't reuse it
 }
 
 extend google.protobuf.FieldOptions {
+    // primary key column
     bool   pkey       = 50001;
+    // kept in the message but not stored
     bool   no_column  = 50002;
+    // unique column, or with (paired) a unique group of columns
     bool   uniq       = 50003;
+    // NOT NULL, and refused before saving when unset
     bool   required   = 50004;
+    // foreign key to "Table.column"
     string ref        = 50005;
+    // group name; fields in the same group share one composite index,
+    // or a unique constraint when they are all (uniq), e.g. "geo"
     string paired     = 50006;
+    // storage hint, "uuid" for a native UUID column on a string field
     string subtype    = 50007;
 }
