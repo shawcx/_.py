@@ -45,3 +45,4 @@ Tests: set up with `uv venv && uv pip install -e '.[test]'`, then `make test PYT
 - Raise `_.error(fmt, *args)` for user-facing failures; it's logged without a traceback unless `--debug`. Use `_.HTTPError` in handlers.
 - Importing `_` replaces `json`'s default encoder with `_.JSONEncoder` (handles `_as_dict`, bytes→base64, UUID, datetime). `protobuf.py` replaces it again when loaded.
 - `_.handlers.Template` renders `<path>.html` from `templates/`. `_.handlers.Protected` and `_.auth` decorators check the `session_id` secure cookie.
+- `_.auth.records` is a no-op by design, so generated record endpoints are open. Apps replace it, before components load, with whatever auth suits them. Don't change the default.
