@@ -1,4 +1,5 @@
 import json
+import sys
 
 APP = '''
     import json
@@ -150,3 +151,47 @@ def test_json_encoder(run_app):
         bytes     = 'aGk=',
         uuid      = '00000000-0000-0000-0000-000000000001',
         )
+
+
+def test_nginx_and_systemd(run_app, tmp_path):
+    files = {
+        'app.py'  : '''
+            import _
+
+            class App(_.Application):
+                def initialize(self):
+                    self.stop()
+
+            App.main()
+            ''',
+        'app.ini' : f'''
+            [app]
+            port = 8123
+
+            [supports]
+            nginx
+            systemd
+
+            [nginx]
+            conf_path = {tmp_path}/{{server_name}}.conf
+
+            [systemd]
+            conf_path = {tmp_path}/{{name}}.service
+            ''',
+        }
+    result = run_app(files, '--nginx', 'example.com')
+    assert 'Installed nginx configuration: example.com' in result.stderr, result.stderr
+    result = run_app(files, '--systemd', 'www-data')
+    assert 'Installed systemd service: app' in result.stderr, result.stderr
+
+    nginx = (tmp_path / 'example.com.conf').read_text()
+    # an upstream per app, so several apps can share one nginx
+    assert 'upstream app {' in nginx and 'proxy_pass http://app;' in nginx
+    assert 'server 127.0.0.1:8123;' in nginx
+    assert '3DES' not in nginx and 'ssl_protocols TLSv1.2 TLSv1.3;' in nginx
+
+    service = (tmp_path / 'app.service').read_text()
+    # run with the same python, so it works without a shebang or exec bit
+    assert f'ExecStart={sys.executable} {tmp_path}/app.py' in service
+    assert f'WorkingDirectory={tmp_path}' in service
+    assert 'User=www-data' in service

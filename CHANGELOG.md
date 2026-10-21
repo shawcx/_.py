@@ -77,6 +77,13 @@ Unreleased
   lost the order of its repeated children.
 - Relational child records are checked against their message when they're
   saved on their own, not only through their parent.
+- `--systemd` wrote `ExecStart=.../__main__.py` for apps started with
+  `python -m`, which systemd can't run. It now writes the same Python and
+  `-m package` (or the script path), adds `WorkingDirectory`, and keeps an
+  `--ini` given on the command line.
+- `--nginx` gives each app its own upstream, so several apps can share one
+  nginx (they all declared `upstream frontends`), and sets TLS 1.2 and 1.3
+  with the default ciphers instead of a list including 3DES.
 - dblogin pointed at an unknown database crashed with a `KeyError`
   traceback instead of naming the database.
 
