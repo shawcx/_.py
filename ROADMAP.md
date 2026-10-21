@@ -6,9 +6,10 @@ Protobuf records
 
 - **Unused options in `Protobuf.proto`.** These are declared but have no
   effect:
-  - `required`: probably a NOT NULL column.
-  - `no_column`: probably keep the field in the message but don't store it.
-  - `ref`: probably a foreign key. It currently prints `TODO: FKEY`.
+  - `required`: a NOT NULL column.
+  - `no_column`: keep the field in the message but don't store it.
+  - `ref`: a foreign key to another table's column. It currently prints
+    `TODO: FKEY`.
   - `refs`, `paired` and `subtype`: the intended behaviour still needs
     defining.
 - **Field names that are Python keywords** such as `from` or `class` raise
