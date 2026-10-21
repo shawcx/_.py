@@ -189,6 +189,8 @@ def test_nginx_and_systemd(run_app, tmp_path):
     assert 'upstream app {' in nginx and 'proxy_pass http://app;' in nginx
     assert 'server 127.0.0.1:8123;' in nginx
     assert '3DES' not in nginx and 'ssl_protocols TLSv1.2 TLSv1.3;' in nginx
+    # static files come straight from the app's static directory
+    assert f'alias {tmp_path}/static/;' in nginx
 
     service = (tmp_path / 'app.service').read_text()
     # run with the same python, so it works without a shebang or exec bit

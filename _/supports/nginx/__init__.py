@@ -16,6 +16,8 @@ class Nginx(_.supports.Support):
     async def init(self, component_name, **kwds):
         self.params = dict(
             root        = _.paths(),
+            # the app's own static files, the directory it serves /static/ from
+            static_path = _.paths('static'),
             ns          = _.ns,
             name        = _.name,
             web_root    = '/var/www/html',

@@ -6,6 +6,10 @@ Unreleased
 
 ### Upgrading
 
+- **`--nginx` serves `/static/` from the app's own `static` directory**
+  instead of `/var/www/static`, so static files no longer need copying.
+  Regenerate the config, and make sure the nginx user can read that
+  directory.
 - **JSON output of protobuf records** (`_as_dict`, `_as_json` and the REST
   handlers) is now the proto3 JSON form throughout: 64-bit integers as
   strings, enums by name, timestamps in RFC 3339, durations such as
