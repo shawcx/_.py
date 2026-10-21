@@ -26,14 +26,19 @@ Changelog
 - **Nested protobuf values** in JSON mode are held in proto3 JSON form:
   64-bit integers as strings, enums by name, bytes as base64.
 - **Binary data records** are JSON encoded instead of pickled.
-- **Python 3.10 or later** is required.
+- **Python 3.10 or later** is required, along with Tornado 6.3 or later.
+  The redis extra needs redis 5.0.1 or later.
+- **Packaging** moved to `pyproject.toml`; `setup.py` remains only for
+  `make deb`.
 
 ### Added
 
+- dblogin passwords are stored as salted scrypt hashes. Existing unsalted
+  hashes still work and are upgraded on the next successful login.
 - `make test` and a pytest suite. Set `UNDERSCORE_TEST_POSTGRES` to also
   run against Postgres.
 - Optional extras: `postgres`, `sqlite`, `redis`, `protobuf`, `ldap`,
-  `migrations` and `test`.
+  `migrations`, `test` and `all`.
 - Listing records with `?type=binary` returns varint length-delimited
   records.
 
@@ -57,5 +62,12 @@ Changelog
   records without a table got a CRUD handler that always failed.
 - Records with handlers crashed a plain `_.Application`.
 - `sqlalchemy[asyncio]` is required, so `greenlet` is installed.
+- Apps using dblogin or the dbcache session store without a `[records]`
+  section crashed at startup, and `--add-user` failed without a `[dblogin]`
+  section.
+- Basic auth returns 400 for a malformed header, quotes the realm, and
+  awaits coroutine handlers.
+- Replaced calls deprecated in Tornado (`get/set_secure_cookie`) and redis
+  (`close`).
 - The SQLite `UUID` type and `RecordsInterface._as_json` raised
   `NameError`.

@@ -91,7 +91,9 @@ class DbLogin(_.logins.Login):
             username,password = add_user
             password = _.auth.hash_password(password)
 
-            record = dict((k,None) for k in _.config[component_name])
+            # the section is optional, it only adds extra columns
+            section = _.config[component_name] if _.config.has_section(component_name) else {}
+            record = dict((k,None) for k in section)
             record.pop('database', None)
             record.pop('table',    None)
 

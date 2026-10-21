@@ -47,14 +47,15 @@ class Component(type(_)):
 
 
 async def load(component_type):
+    # import the component submodule from _
+    module = importlib.import_module(f'_.{component_type}')
+    # wrap the submodule in a Component class, even when none are configured,
+    # since a later "import _.records" would otherwise leave the bare module
+    setattr(_, component_type, Component(module))
+
     # skip components not specified in the config
     if component_type not in _.config:
         return
-
-    # import the component submodule from _
-    module = importlib.import_module(f'_.{component_type}')
-    # wrap the submodule in a Component class
-    setattr(_, component_type, Component(module))
 
     # iterate over the components specified in the config
     for component_name in _.config[component_type]:

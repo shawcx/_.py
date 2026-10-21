@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- `make install`: `pip3 install --upgrade .`
-- `make dist` / `make deb`: sdist or Debian package (deb needs `stdeb`)
+- `make install`: `pip3 install --upgrade .`. `make develop` does an editable install with every extra.
+- `make dist`: sdist and wheel via `python -m build`. `make deb`: Debian package (needs `stdeb`).
+- Packaging metadata is in `pyproject.toml`. The version comes from `_/version.py`, and `setup.py` is only a shim for stdeb.
 - `make clean` / `make distclean`
 - Run the example app: `make -C skeleton run` (compiles protobufs with `protoc`, builds JS/CSS via npm/browserify/sass, then runs `PYTHONPATH=.. python3 -m skeleton --debug`). Needs the databases it names in `skeleton.ini` (Postgres, and Redis for the redis cache) unless you trim the INI.
 - Print the Protobuf options template: `python3 -m _.records.protobuf`
@@ -47,11 +48,11 @@ Tests: set up with `uv venv && uv pip install -e '.[test,protobuf,postgres]'`, t
   - Storage: singular scalars get native columns, and `uint64` uses `_.databases.UInt64`. Repeated scalars use `db.array()`: `ARRAY` on Postgres, a JSON list elsewhere. Maps are always JSON. Messages are JSON in proto3 JSON form, or child tables `<Parent>_<field>` when `relational`; repeated children are kept in order by a `_position` column.
   - Conversion goes through real protobuf messages (`_assign_pb` and `_fill_pb`). Child table classes live in `_proto_children`.
 
-**Logins** register handlers at `/login/<component>` and add `/login` and `/logout`. On success they call `application.on_<component>_login_success`, or the generic `on_login_success`, which must return a session dict containing `session_id`; it's saved through `_.sessions`.
+**Logins** register handlers at `/login/<component>` and add `/login` and `/logout`. On success they call `application.on_<component>_login_success`, or the generic `on_login_success`, which must return a session dict containing `session_id`; it's saved through `_.sessions`. dblogin stores salted scrypt hashes (`_.auth.hash_password`). Older `simple_hash` passwords still verify and are rehashed on the next successful login.
 
 **Conventions**
 - Hooks may be sync or async; the framework calls them through `await _.wait(...)`.
 - Raise `_.error(fmt, *args)` for user-facing failures; it's logged without a traceback unless `--debug`. Use `_.HTTPError` in handlers.
 - Importing `_` replaces `json`'s default encoder with `_.JSONEncoder` (handles `_as_dict`, bytes→base64, UUID, datetime). `protobuf.py` replaces it again when loaded.
-- `_.handlers.Template` renders `<path>.html` from `templates/`. `_.handlers.Protected` and `_.auth` decorators check the `session_id` secure cookie.
+- `_.handlers.Template` renders `<path>.html` from `templates/`. `_.handlers.Protected` and `_.auth` decorators check the signed `session_id` cookie.
 - `_.auth.records` is a no-op by design, so generated record endpoints are open. Apps replace it, before components load, with whatever auth suits them. Don't change the default.
