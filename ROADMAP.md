@@ -10,9 +10,6 @@ Protobuf records
 - **Field names that are Python keywords** such as `from` or `class` raise
   an error, because record fields are Python attributes. Store them as
   `from_` while keeping the column and message name `from`.
-- **Well-known types.** `google.protobuf.Timestamp` is stored as a JSON
-  `{seconds, nanos}` object; map it to `TIMESTAMPTZ`, and consider
-  `Duration` and the wrapper types.
 - **Consistent JSON API output.** Top-level 64-bit integers are JSON
   numbers and enums are numbers, but nested ones use proto3 JSON form
   (strings and names). Pick one form for the whole record.

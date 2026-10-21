@@ -19,6 +19,10 @@ PROTO = '''
     package pbt;
 
     import "pbt/Protobuf.proto";
+    import "google/protobuf/duration.proto";
+    import "google/protobuf/struct.proto";
+    import "google/protobuf/timestamp.proto";
+    import "google/protobuf/wrappers.proto";
 
     enum Color {
         RED   = 0;
@@ -68,6 +72,20 @@ PROTO = '''
     message Tags {
         option (no_table) = true;
         repeated string tags = 1;
+    }
+
+    message Event {
+        string                      name  = 1 [(pkey) = true];
+        google.protobuf.Timestamp   at    = 2;
+        google.protobuf.Duration    took  = 3;
+        google.protobuf.Int64Value  count = 4;
+        google.protobuf.StringValue note  = 5;
+        google.protobuf.UInt64Value big   = 6;
+        google.protobuf.Struct      meta  = 7;
+        google.protobuf.Value       value = 8;
+        repeated google.protobuf.Timestamp times = 9;
+        google.protobuf.Timestamp   unset = 10;
+        google.protobuf.BytesValue  blob  = 11;
     }
 
     message Owner {
@@ -156,6 +174,46 @@ APP = '''
                 except _.error as e:
                     out['invalid'] = 'rejected' if 'nope' in str(e) else str(e)
                 out['invalid_stored'] = await db.find_one(pb.Everything, 'bad') is not None
+
+            # well-known types
+            EVENT = dict(
+                name  = 'launch',
+                at    = '2024-05-01T12:00:00.123456Z',
+                took  = '90.5s',
+                count = '0',
+                note  = 'hi',
+                big   = MAX,
+                meta  = {'tags': ['a', 1], 'ok': True},
+                value = 3.5,
+                times = ['2024-01-01T00:00:00Z'],
+                blob  = 'AAE=',
+                )
+            await db.insert(pb.Event._from_dict(EVENT))
+            event = await db.find_one(pb.Event, 'launch')
+            out['event'] = as_json(event._as_pb()) == expected(pbt.Test_pb2.Event, EVENT)
+            out['event_values'] = dict(
+                at    = event.at.isoformat(),
+                took  = event.took.total_seconds(),
+                count = event.count,
+                note  = event.note,
+                big   = event.big,
+                meta  = event.meta,
+                value = event.value,
+                times = event.times,
+                unset = event.unset,
+                blob  = event.blob.hex(),
+                )
+            # an unset wrapper is None, unlike a stored 0
+            await db.insert(pb.Event._from_dict(dict(name='empty')))
+            empty = await db.find_one(pb.Event, 'empty')
+            out['event_empty'] = [empty.count, empty.note, empty.at]
+            out['event_json'] = json.loads(event._as_json())['took']
+            def event_columns(conn):
+                inspector = sqlalchemy.inspect(conn)
+                return {c['name']: str(c['type']) for c in inspector.get_columns('Event')}, inspector.get_table_names()
+            async with db.engine.connect() as conn:
+                columns,tables = await conn.run_sync(event_columns)
+            out['event_columns'] = dict(columns=columns, child_tables=sorted(t for t in tables if t.startswith('Event_')))
 
             # required, ref and no_column options
             await db.insert(pb.Owner._from_dict(dict(name='alice')))
@@ -304,6 +362,29 @@ def test_protobuf_records(run_proto_app, relational):
         maybe  = None,
         places = {'home': {'city': 'c', 'code': 'AQ==', 'big': '9007199254740993'}},
         )
+
+    assert out['event'] is True
+    assert out['event_values'] == dict(
+        at    = '2024-05-01T12:00:00.123456+00:00',
+        took  = 90.5,
+        count = 0,
+        note  = 'hi',
+        big   = 2**64 - 1,
+        meta  = {'tags': ['a', 1], 'ok': True},
+        value = 3.5,
+        # repeated well-known types stay in proto3 JSON form
+        times = ['2024-01-01T00:00:00Z'],
+        unset = None,
+        blob  = '0001',
+        )
+    assert out['event_empty'] == [None, None, None]
+    assert out['event_json'] == 90.5
+    columns = out['event_columns']['columns']
+    assert columns['at'] in ('TIMESTAMP', 'DATETIME')
+    assert columns['took'] in ('INTERVAL', 'DATETIME')
+    assert columns['count'] == 'BIGINT'
+    # no child tables, even in relational mode
+    assert out['event_columns']['child_tables'] == []
 
     pet = out['pet']
     assert pet['ok'] == 'stored'

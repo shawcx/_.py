@@ -8,6 +8,7 @@
 
 import configparser
 import dataclasses
+import datetime
 import json
 import keyword
 import logging
@@ -38,6 +39,64 @@ def _check_names(descriptor):
     for field in descriptor.fields:
         if keyword.iskeyword(field.name):
             raise _.error('Field "%s" in %s is a Python keyword', field.name, descriptor.full_name)
+
+
+# well-known types that get native columns and Python values
+_WKT = {
+    'google.protobuf.Timestamp'   : 'timestamp',
+    'google.protobuf.Duration'    : 'duration',
+    'google.protobuf.Struct'      : 'json',
+    'google.protobuf.Value'       : 'json',
+    'google.protobuf.ListValue'   : 'json',
+    'google.protobuf.DoubleValue' : 'wrapper',
+    'google.protobuf.FloatValue'  : 'wrapper',
+    'google.protobuf.Int64Value'  : 'wrapper',
+    'google.protobuf.UInt64Value' : 'wrapper',
+    'google.protobuf.Int32Value'  : 'wrapper',
+    'google.protobuf.UInt32Value' : 'wrapper',
+    'google.protobuf.BoolValue'   : 'wrapper',
+    'google.protobuf.StringValue' : 'wrapper',
+    'google.protobuf.BytesValue'  : 'wrapper',
+    }
+
+
+def _wkt(field):
+    'the kind of well-known type for a single field, None for anything else'
+    if field.message_type is None or _repeated(field):
+        return None
+    return _WKT.get(field.message_type.full_name)
+
+
+def _is_wkt_message(field):
+    'true for single and repeated well-known type fields'
+    return field.message_type is not None and field.message_type.full_name in _WKT
+
+
+def _from_wkt(kind, msg):
+    if kind == 'timestamp':
+        return msg.ToDatetime(tzinfo=datetime.timezone.utc)
+    if kind == 'duration':
+        return msg.ToTimedelta()
+    if kind == 'wrapper':
+        return msg.value
+    return google.protobuf.json_format.MessageToDict(msg)
+
+
+def _to_wkt(kind, value, msg):
+    msg.SetInParent()
+    if kind in ('timestamp', 'duration') and isinstance(value, str):
+        # RFC 3339 times and durations such as "1.5s"
+        msg.FromJsonString(value)
+    elif kind == 'timestamp':
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.timezone.utc)
+        msg.FromDatetime(value)
+    elif kind == 'duration':
+        msg.FromTimedelta(value)
+    elif kind == 'wrapper':
+        msg.value = _scalar(msg.DESCRIPTOR.fields_by_name['value'], value)
+    else:
+        google.protobuf.json_format.ParseDict(value, msg)
 
 
 def _is_map(field):
@@ -228,8 +287,9 @@ class Protobuf(_.records.Record):
                     raise _.error('%s: only single scalar fields can have a ref', where)
                 foreign_key = [sqlalchemy.ForeignKey(ref)]
 
-            if _is_message(field) and self.relational and not _is_map(field):
-                # messages become child tables, maps stay JSON
+            kind = _wkt(field)
+            if _is_message(field) and self.relational and not _is_map(field) and not _is_wkt_message(field):
+                # messages become child tables, maps and well-known types don't
                 ref_table_name = f'{name}_{field.name}'
                 ordering = {}
                 if _repeated(field):
@@ -252,7 +312,10 @@ class Protobuf(_.records.Record):
                 child_tables[ref_table_name] = field
                 continue
 
-            if _is_message(field):
+            if kind:
+                # well-known types get native columns
+                column_type = self._wkt_column_type(kind, field)
+            elif _is_message(field):
                 # messages and maps are stored in their proto3 JSON form
                 column_type = (self.db.JSON or sqlalchemy.JSON)(none_as_null=True)
             else:
@@ -354,6 +417,15 @@ class Protobuf(_.records.Record):
 
         _.application._record_handler(self.component_name, record_handler)
 
+    def _wkt_column_type(self, kind, field):
+        if kind == 'timestamp':
+            return _.databases.UTCDateTime()
+        if kind == 'duration':
+            return sqlalchemy.Interval()
+        if kind == 'wrapper':
+            return self._column_type(field.message_type.fields_by_name['value'])
+        return (self.db.JSON or sqlalchemy.JSON)(none_as_null=True)
+
     def _column_type(self, field):
         F = google.protobuf.descriptor.FieldDescriptor
         if field.type in (F.TYPE_DOUBLE, F.TYPE_FLOAT):
@@ -393,7 +465,10 @@ class ProtoInterface(_.records.RecordsInterface):
         for field in pb.DESCRIPTOR.fields:
             child_type = self._proto_children.get(field.name)
             value = getattr(pb, field.name)
-            if _is_message(field) and not child_type:
+            kind = _wkt(field)
+            if kind:
+                value = _from_wkt(kind, value) if pb.HasField(field.name) else None
+            elif _is_message(field) and not child_type:
                 if json_form is None:
                     json_form = _json_form(pb)
                 # unset singular messages are left out of the JSON form
@@ -420,7 +495,10 @@ class ProtoInterface(_.records.RecordsInterface):
             value = getattr(self, field.name, None)
             if value is None:
                 continue
-            if _is_message(field) and not self._proto_children.get(field.name):
+            kind = _wkt(field)
+            if kind:
+                _to_wkt(kind, value, getattr(pb, field.name))
+            elif _is_message(field) and not self._proto_children.get(field.name):
                 json_form[field.name] = value
             elif _is_message(field):
                 if _repeated(field):

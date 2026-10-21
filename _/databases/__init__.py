@@ -7,6 +7,7 @@
 #
 
 import base64
+import datetime
 import io
 import logging
 import typing
@@ -46,6 +47,30 @@ class UInt64(sqlalchemy.types.TypeDecorator):
         if dialect.name == 'postgresql':
             return int(value)
         return value + (1 << 64) if value < 0 else value
+
+
+class UTCDateTime(sqlalchemy.types.TypeDecorator):
+    '''timezone-aware datetime: TIMESTAMPTZ on Postgres, UTC without a zone on
+       SQLite, always returned in UTC with tzinfo set; naive values are UTC'''
+    impl     = sqlalchemy.DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.timezone.utc)
+        value = value.astimezone(datetime.timezone.utc)
+        if dialect.name != 'postgresql':
+            value = value.replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if value.tzinfo is None:
+            return value.replace(tzinfo=datetime.timezone.utc)
+        return value.astimezone(datetime.timezone.utc)
 
 
 class JSONArray(sqlalchemy.types.TypeDecorator):

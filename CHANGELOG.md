@@ -4,7 +4,29 @@ Changelog
 Unreleased
 ----------
 
+### Upgrading
+
+- **Protobuf well-known types** get native columns, so existing tables
+  differ and the startup check prints the SQL. In JSON mode a JSON
+  `Timestamp` column becomes `TIMESTAMPTZ`, a type change you apply by
+  hand. In relational mode the child tables these types used to get, such
+  as `Event_at` with `seconds` and `nanos`, are replaced by a column that
+  `--<database>-migrate` adds; copy any data across, then drop the old
+  table. On records these fields now hold `datetime`, `timedelta` and plain
+  values rather than proto3 JSON strings and objects.
+
 ### Added
+
+- Protobuf well-known types are stored natively:
+  - `Timestamp` becomes a `TIMESTAMPTZ` column held as a UTC `datetime`,
+    accurate to the microsecond.
+  - `Duration` becomes an `INTERVAL` held as a `timedelta`.
+  - Wrappers such as `Int64Value` and `StringValue` become a nullable column
+    of the wrapped type, so an unset value is `None` and differs from a
+    stored `0` or `""`.
+  - `Struct`, `Value` and `ListValue` become JSON columns holding plain
+    dicts, values and lists.
+  - Repeated well-known types are stored as JSON in proto3 JSON form.
 
 - Protobuf field options that were declared but ignored now work:
   - `(required)` makes the column NOT NULL and refuses to store a record

@@ -80,6 +80,8 @@ class JSONEncoder(json.JSONEncoder):
             return str(obj)
         if isinstance(obj, datetime.datetime):
             return str(obj)
+        if isinstance(obj, datetime.timedelta):
+            return obj.total_seconds()
         return json.JSONEncoder.default(self, obj)
 
 json._default_encoder = JSONEncoder()

@@ -34,8 +34,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install protoc and psql
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler postgresql-client
+      - name: Install protoc, the well-known .proto files and psql
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev postgresql-client
 
       - name: Install package
         run: pip install -e '.[test,protobuf,postgres]'
