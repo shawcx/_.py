@@ -4,7 +4,6 @@ import functools
 import inspect
 import logging
 import json
-import pickle
 import typing
 
 import sqlalchemy
@@ -181,12 +180,12 @@ class DataInterface(_.records.RecordsInterface):
 
     @classmethod
     def _from_binary(cls, msg):
-        return DataInterface.__dataclass(cls, pickle.loads(msg), cls())
+        return DataInterface.__dataclass(cls, json.loads(msg), cls())
 
     def _as_binary(self):
-        _dict = self._as_dict()
-        _dict.pop(self.__primary_key__, None)
-        return pickle.dumps(_dict)
+        # omits an auto-generated primary key but keeps a declared one
+        _dict = dataclasses.asdict(self)
+        return json.dumps(_dict, cls=_.JSONEncoder, separators=(',',':')).encode('utf-8')
 
 
 class DataContainer(_.Container):

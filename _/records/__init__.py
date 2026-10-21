@@ -81,7 +81,7 @@ class RecordsInterface:
         return _dict
 
     def _as_json(self, **kwds):
-        return json.dumps(self, cls=_Json, separators=(',',':'), **kwds)
+        return json.dumps(self, cls=_.JSONEncoder, separators=(',',':'), **kwds)
 
 
 class HandlerInterface(_.handlers.Protected):
@@ -92,17 +92,40 @@ class HandlerInterface(_.handlers.Protected):
         else:
             self.set_header('Content-Type', 'application/octet-stream')
 
+    async def prepare(self):
+        await super().prepare()
+        # decode here as HTTPErrors raised in initialize drop the connection
         if self.request.body:
             try:
                 if self.content_type == 'json':
                     self.data = json.loads(self.request.body)
                 else:
                     self.data = self._record._from_binary(self.request.body)
-
-            except:
-                raise _.HTTPError(500)
+            except Exception:
+                raise _.HTTPError(400) from None
         else:
             self.data = None
+
+    def _record_from_body(self):
+        if self.data is None:
+            raise _.HTTPError(400)
+        # binary bodies are already decoded into a record
+        if self.content_type != 'json':
+            return self.data
+        try:
+            return self._record._from_dict(self.data)
+        except Exception:
+            raise _.HTTPError(400) from None
+
+    def _record_key(self, record_id):
+        # convert the URL path to the primary key column's type
+        try:
+            column = getattr(self._record, self._record.__primary_key__)
+            return column.expression.type.python_type(record_id)
+        except (AttributeError, NotImplementedError):
+            return record_id
+        except ValueError:
+            raise _.HTTPError(404) from None
 
     @_.auth.records
     async def get(self, record_id):
@@ -113,8 +136,7 @@ class HandlerInterface(_.handlers.Protected):
             else:
                 self.write(dict(data=records))
         else:
-            record_id = int(record_id)
-            record = await self._db.find_one(self._record, record_id)
+            record = await self._db.find_one(self._record, self._record_key(record_id))
             if record is None:
                 raise _.HTTPError(404)
             if self.content_type == 'json':
@@ -125,7 +147,7 @@ class HandlerInterface(_.handlers.Protected):
     @_.auth.records
     async def post(self, record_id, record=None):
         if record is None:
-            record = self._record._from_binary(self.request.body)
+            record = self._record_from_body()
         try:
             await self._db.insert(record)
         except _.error as e:
@@ -136,7 +158,7 @@ class HandlerInterface(_.handlers.Protected):
     @_.auth.records
     async def put(self, record_id, record=None):
         if record is None:
-            record = self._record._from_dict(self.data)
+            record = self._record_from_body()
         try:
             await self._db.upsert(record)
         except _.error as e:
@@ -145,9 +167,9 @@ class HandlerInterface(_.handlers.Protected):
 
     @_.auth.records
     async def delete(self, record_id):
-        if record_id is None:
-            raise _.HTTPError(500)
-        count = await self._db.delete(self._record, record_id)
+        if not record_id:
+            raise _.HTTPError(400)
+        count = await self._db.delete(self._record, self._record_key(record_id))
         if not count:
             raise _.HTTPError(404)
         self.set_status(204)
