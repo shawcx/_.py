@@ -22,6 +22,14 @@ import google.protobuf.json_format
 import _
 
 
+def _repeated(field):
+    # FieldDescriptor.label was removed in protobuf 7
+    try:
+        return field.is_repeated
+    except AttributeError:
+        return field.label == field.LABEL_REPEATED
+
+
 class Protobuf(_.records.Record):
     async def init(self, module, **kwds):
         # setup the container beforehand so the data module can use data decorators
@@ -69,6 +77,7 @@ class Protobuf(_.records.Record):
             self._options = getattr(module, self._options_name)
         except AttributeError:
             raise _.error('Cannot find protobuf module "%s"', self._options_name)
+        self._package = module.__name__
         self.load_module(module)
         del self._module_name
 
@@ -82,17 +91,22 @@ class Protobuf(_.records.Record):
             # get a handle to the pb2 module descriptor
             member = getattr(module, member_name)
 
+            # ignore anything that isn't a module from this package
+            if not isinstance(member, types.ModuleType):
+                continue
+            if not member.__name__.startswith(self._package + '.'):
+                continue
+
             # all proto messages end with _pb2
             if not member_name.endswith('_pb2'):
                 # ignore any module starting with _
                 if not member_name.startswith('_'):
                     # load submodules for nested protobufs
-                    if isinstance(member, types.ModuleType):
-                        self._container[member_name] = ProtobufContainer()
-                        stash = (self._container,self._module_name)
-                        self._container = self._container[member_name]
-                        self.load_module(member)
-                        (self._container,self._module_name) = stash
+                    self._container[member_name] = ProtobufContainer()
+                    stash = (self._container,self._module_name)
+                    self._container = self._container[member_name]
+                    self.load_module(member)
+                    (self._container,self._module_name) = stash
                 continue
 
             # iterate over all the message definitions
@@ -103,7 +117,12 @@ class Protobuf(_.records.Record):
                 if self.db and not options.Extensions[self._options.no_table]:
                     record_type = self._proto_table(name, message=message)
                 else:
-                    record_type = type(name, (ProtoInterface,), {'_ProtoInterface__pb' : message,})
+                    # declare the message fields so _as_dict has something to return
+                    fields = message.DESCRIPTOR.fields
+                    members = {f.name:None for f in fields}
+                    members['__annotations__'] = {f.name:typing.Any for f in fields}
+                    members['_ProtoInterface__pb'] = message
+                    record_type = type(name, (ProtoInterface,), members)
                     record_type = dataclasses.dataclass(init=False, kw_only=True)(record_type)
 
                 self._container[name] = record_type
@@ -154,7 +173,7 @@ class Protobuf(_.records.Record):
                     ref_table_name = f'{name}_{field.name}'
                     column_type = ref_table_name
 
-                if field.label is field.LABEL_REPEATED:
+                if _repeated(field):
                     column_type = list[column_type]
 
                 column_type = sqlalchemy.orm.Mapped[typing.Optional[column_type]]
@@ -173,6 +192,7 @@ class Protobuf(_.records.Record):
                         back_populates=name,
                         lazy='joined',
                         cascade="all, delete-orphan",
+                        passive_deletes=True,
                         init=False,
                         )
                     child_tables[ref_table_name] = field
@@ -181,7 +201,7 @@ class Protobuf(_.records.Record):
                 if column_type is bytes:
                     explicit_type = self.db.BYTES
                 # support repeated field types
-                if field.label is field.LABEL_REPEATED:
+                if _repeated(field):
                     if column_type is str:
                         explicit_type = sqlalchemy.ARRAY(sqlalchemy.TEXT)
                     column_type = list[column_type]
@@ -222,7 +242,7 @@ class Protobuf(_.records.Record):
 
         if parent and parent_key and parent_col:
             members[f'{parent}_{parent_key}'] = sqlalchemy.orm.mapped_column(
-                sqlalchemy.ForeignKey(f'{parent}.{parent_key}'),
+                sqlalchemy.ForeignKey(f'{parent}.{parent_key}', ondelete='CASCADE'),
                 init=False,
                 )
             members[f'{parent}'] = sqlalchemy.orm.relationship(
@@ -288,13 +308,15 @@ class ProtoInterface(_.records.RecordsInterface):
     @staticmethod
     def __descriptor(dst, descriptor, msg):
         for field in descriptor.fields:
-            if field.type is field.TYPE_MESSAGE:
-                if field.label == field.LABEL_REPEATED:
+            if field.type == field.TYPE_MESSAGE:
+                if _repeated(field):
                     dst[field.name] = []
                     for item in getattr(msg, field.name):
                         dst[field.name].append(ProtoInterface.__descriptor({}, field.message_type, item))
                 else:
                     dst[field.name] = ProtoInterface.__descriptor({}, field.message_type, getattr(msg, field.name))
+            elif _repeated(field):
+                dst[field.name] = list(getattr(msg, field.name))
             else:
                 dst[field.name] = getattr(msg, field.name)
         return dst
@@ -344,7 +366,8 @@ class ProtoInterface(_.records.RecordsInterface):
     def _as_pb(self):
         pb = self.__pb()
         _dict = self._as_dict()
-        _dict.pop(self.__primary_key__, None)
+        # drop generated columns such as an auto-increment primary key
+        _dict = {f.name:_dict[f.name] for f in pb.DESCRIPTOR.fields if f.name in _dict}
         try:
             google.protobuf.json_format.ParseDict(_dict, pb)
         except google.protobuf.json_format.ParseError as e:
