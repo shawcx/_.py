@@ -19,8 +19,26 @@ SASS_FLAGS = -I ./node_modules/@fortawesome/fontawesome-free/scss \
 WEBFONTS_SRC = ./node_modules/@fortawesome/fontawesome-free/webfonts
 WEBFONTS = $(STATIC_ROOT)/webfonts
 
-all: node_modules $(JS_OUT) $(CSS_OUT) $(WEBFONTS)
+LOGO    = $(STATIC_ROOT)/images/skeleton.png
+FAVICON = $(STATIC_ROOT)/favicon.ico
+
+all: node_modules $(JS_OUT) $(CSS_OUT) $(WEBFONTS) $(LOGO) $(FAVICON)
 	@#
+
+$(LOGO): images/skeleton.png
+	@mkdir -p $(dir $@)
+	@cp $< $@
+
+$(FAVICON): images/favicon.ico
+	@cp $< $@
+
+# regenerate the committed images after editing the SVGs,
+# needs rsvg-convert (librsvg) and ImageMagick
+images:
+	rsvg-convert -w 96 -h 96 images/skeleton.svg -o images/skeleton.png
+	for s in 16 32 48; do rsvg-convert -w $$s -h $$s images/favicon.svg -o images/favicon-$$s.png; done
+	convert images/favicon-16.png images/favicon-32.png images/favicon-48.png images/favicon.ico
+	rm images/favicon-*.png
 
 $(WEBFONTS): $(WEBFONTS_SRC)
 	@cp -r $(WEBFONTS_SRC) $(STATIC_ROOT)
@@ -36,9 +54,12 @@ $(CSS_OUT): $(CSS_SRC)
 	@echo sass $< '=>' $@
 	@$(SASS) $(SASS_FLAGS) $< $@
 
+.PHONY: images
+
 clean:
 
 distclean: clean
 	@rm -vf $(CSS_OUT)
 	@rm -vf $(JS_OUT)
+	@rm -vf $(LOGO) $(FAVICON)
 	@rm -rf node_modules

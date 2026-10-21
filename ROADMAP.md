@@ -26,8 +26,5 @@ Smaller items
   no migration history.
 - Importing `_` replaces the `json` module's default encoder for the whole
   process.
-- dblogin catches `AttributeError` where a missing database raises
-  `KeyError`.
-- Skeleton: `static/images/skeleton.png` and `favicon.ico` aren't in the
-  repo; the UI hasn't been checked in a browser; `--nginx` and `--systemd`
-  are untested.
+- Skeleton: the UI hasn't been checked in a browser; `--nginx` and
+  `--systemd` are untested.

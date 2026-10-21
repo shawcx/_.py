@@ -11,6 +11,13 @@ Unreleased
     with the field unset, including fields on relational child records.
   - `(no_column)` keeps the field in the message but doesn't store it.
   - `(ref) = "Table.column"` adds a foreign key.
+- The skeleton has a logo and favicon, drawn as SVGs in
+  `skeleton/src/images`; `make images` there re-renders them.
+
+### Fixed
+
+- dblogin pointed at an unknown database crashed with a `KeyError`
+  traceback instead of naming the database.
 
 0.9.0
 -----
