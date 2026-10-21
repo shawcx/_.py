@@ -6,6 +6,8 @@
 # Matthew Shaw <mshaw.cx@gmail.com>
 #
 
+import os
+
 import tornado.web
 
 import _
@@ -18,6 +20,9 @@ class Template(tornado.web.RequestHandler):
 
     def get(self, template=None, *args):
         template = template + '.html' if template else self.template
+        # the template name can come from the URL, so a missing one is not found
+        if not os.path.exists(os.path.join(self.get_template_path(), template)):
+            raise _.HTTPError(404)
         self.render(template, extra=args, **self.kwds)
 
 

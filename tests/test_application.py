@@ -55,3 +55,26 @@ def test_records_in_plain_application(run_app, tmp_path):
         })
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "['thing']"
+
+
+def test_missing_template_is_not_found(tmp_path):
+    from conftest import Server
+    server = Server(tmp_path, {
+        'app.py' : '''
+            import _
+
+            class App(_.WebApplication):
+                def initialize(self):
+                    self.patterns = [(r'/([a-z]*)', _.handlers.Template)]
+
+            App.main()
+            ''',
+        'templates/index.html' : 'hello',
+        })
+    try:
+        assert server.request('GET', '/') == (200, b'hello')
+        assert server.request('GET', '/index') == (200, b'hello')
+        # page names come from the URL, so a missing template is a 404, not a 500
+        assert server.request('GET', '/missing')[0] == 404
+    finally:
+        server.stop()

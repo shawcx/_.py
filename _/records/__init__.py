@@ -173,7 +173,7 @@ class HandlerInterface(_.handlers.Protected):
         try:
             await self._db.upsert(record)
         except _.error as e:
-            raise _.HTTPError(500, e) from None
+            raise _.HTTPError(400, e) from None
         self.set_status(204)
 
     @_.auth.records

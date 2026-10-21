@@ -296,6 +296,11 @@ class Protobuf(_.records.Record):
 
         table_type = type(name, (ProtoInterface,self.db.Base,), members)
 
+        if message:
+            # refuse to store a record that its message can't represent
+            sqlalchemy.event.listen(table_type, 'before_insert', _validate)
+            sqlalchemy.event.listen(table_type, 'before_update', _validate)
+
         for child_table,field in child_tables.items():
             child_type = self._proto_table(child_table, descriptor=field.message_type, parent=name, parent_key=primary_key, parent_col=field.name, ordered=_repeated(field))
             table_type._proto_children[field.name] = child_type
@@ -442,6 +447,11 @@ class ProtoInterface(_.records.RecordsInterface):
             return self._fill_pb(self.__pb())
         except (google.protobuf.json_format.ParseError, TypeError, ValueError, KeyError) as e:
             raise _.error('%s', e) from None
+
+
+def _validate(mapper, connection, record):
+    # raises _.error when a field doesn't fit the message, e.g. an unknown nested key
+    record._as_pb()
 
 
 def _scalar(field, value):

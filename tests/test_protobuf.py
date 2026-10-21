@@ -134,6 +134,17 @@ APP = '''
                 places = loaded.places,
                 )
 
+            # nested values are checked against the message before they're stored
+            if not _.config.getboolean('pb', 'relational'):
+                bad = pb.Everything._from_dict(dict(name='bad', addr={'city': 'x'}))
+                bad.addr['nope'] = 1
+                try:
+                    await db.insert(bad)
+                    out['invalid'] = 'stored'
+                except _.error as e:
+                    out['invalid'] = 'rejected' if 'nope' in str(e) else str(e)
+                out['invalid_stored'] = await db.find_one(pb.Everything, 'bad') is not None
+
             # nested messages convert from dicts in both modes
             await db.insert(pb.Order._from_dict(ORDER))
             order = (await db.find(pb.Order))[0]
@@ -246,6 +257,10 @@ def test_protobuf_records(run_proto_app, relational):
         maybe  = None,
         places = {'home': {'city': 'c', 'code': 'AQ==', 'big': '9007199254740993'}},
         )
+
+    if not relational:
+        assert out['invalid'] == 'rejected'
+        assert out['invalid_stored'] is False
 
     if relational:
         # deleting by id cascades to child tables in the database

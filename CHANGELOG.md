@@ -71,3 +71,10 @@ Changelog
   (`close`).
 - The SQLite `UUID` type and `RecordsInterface._as_json` raised
   `NameError`.
+- Protobuf records are checked against their message before they're
+  stored, so an unknown nested key is rejected (400 from the REST handlers)
+  instead of being saved and breaking later reads.
+- `_.handlers.Template` returns 404 for a page without a template instead
+  of 500.
+- The skeleton's WebSocket handler, admin page URLs, missing dashboard and
+  messages pages, and JS rebuilds after editing `js/records/` are fixed.
