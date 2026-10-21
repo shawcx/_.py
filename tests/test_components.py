@@ -88,3 +88,30 @@ def test_unknown_component(run_app):
         })
     assert 'Unknown module: _.supports.nope' in result.stderr
     assert result.stdout == ''
+
+
+def test_sqlite_uuid_type(run_app, tmp_path):
+    result = run_app({
+        'app.py'  : '''
+            import uuid
+            import sqlalchemy
+            import _
+
+            class App(_.Application):
+                async def initialize(self):
+                    table = sqlalchemy.Table('t', sqlalchemy.MetaData(),
+                        sqlalchemy.Column('u', _.db.UUID()))
+                    value = uuid.uuid4()
+                    async with _.db.engine.begin() as conn:
+                        await conn.run_sync(table.metadata.create_all)
+                        await conn.execute(table.insert().values(u=value))
+                        loaded = (await conn.execute(sqlalchemy.select(table.c.u))).scalar()
+                    print(loaded == value)
+                    self.stop()
+
+            App.main()
+            ''',
+        'app.ini' : f'[databases]\ndb = sqlite\n\n[db]\ndatabase = {tmp_path}/db.db\n',
+        })
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'True', result.stderr

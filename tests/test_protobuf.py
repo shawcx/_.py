@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from conftest import ROOT, backends, database_ini
+from conftest import ROOT, Server, backends, database_ini
 
 pytest.importorskip('google.protobuf')
 if not shutil.which('protoc'):
@@ -259,3 +259,99 @@ def test_protobuf_schema_matches(run_proto_app, relational):
     run_proto_app(relational)
     started = run_proto_app(relational, reset=False, app=STARTED)
     assert started == 'started'
+
+
+WEB_APP = '''
+    import _
+
+    class App(_.WebApplication):
+        def is_session_expired(self, *args, **kwds):
+            return False
+
+        def initialize(self):
+            pass
+
+    App.main()
+    '''
+
+
+@pytest.fixture
+def proto_server(tmp_path):
+    # two components each with a message named Greeting, one with a custom handler
+    files = {
+        'pbw/Web.proto'     : '''
+            syntax = "proto3";
+            package pbw;
+            import "pbw/Protobuf.proto";
+            message Greeting { option (no_table) = true; string text = 1; }
+            message Plain    { option (no_table) = true; string text = 1; }
+            message Thing    { string name = 1 [(pkey) = true]; }
+            ''',
+        'pbw/__init__.py'   : '''
+            from . import Web_pb2
+            import _
+
+            @_.web.handles(Web_pb2.Greeting)
+            class Hello:
+                async def get(self, record_id=None):
+                    self.write(f'hello {record_id}')
+            ''',
+        'pbo/Other.proto'   : '''
+            syntax = "proto3";
+            package pbo;
+            import "pbw/Protobuf.proto";
+            message Greeting { option (no_table) = true; string text = 1; }
+            ''',
+        # the options can only be defined once, so share them
+        'pbo/__init__.py'   : 'from pbw import Protobuf_pb2\nfrom . import Other_pb2\n',
+        }
+    (tmp_path / 'pbw').mkdir()
+    (tmp_path / 'pbo').mkdir()
+    shutil.copy(os.path.join(ROOT, '_', 'records', 'Protobuf.proto'), tmp_path / 'pbw')
+    for name,content in files.items():
+        (tmp_path / name).write_text(textwrap.dedent(content))
+    subprocess.run(['protoc', '-I.', '--python_out=.', 'pbw/Protobuf.proto', 'pbw/Web.proto', 'pbo/Other.proto'],
+        cwd=tmp_path, check=True)
+    server = Server(tmp_path, {
+        'app.py'  : WEB_APP,
+        'app.ini' : f'''
+            [app]
+            sessions = memory
+
+            [databases]
+            db = sqlite
+
+            [db]
+            database = {tmp_path}/web.db
+
+            [caches]
+            memory
+
+            [records]
+            web   = protobuf
+            other = protobuf
+
+            [web]
+            module   = pbw
+            database = db
+            options  = Protobuf
+
+            [other]
+            module   = pbo
+            database = db
+            options  = Protobuf
+            ''',
+        })
+    yield server
+    server.stop()
+
+
+def test_protobuf_handler_routes(proto_server):
+    # custom handlers are served at the message name
+    assert proto_server.request('GET', '/web/Greeting/x') == (200, b'hello x')
+    assert proto_server.request('GET', '/web/Hello/x')[0] == 404
+    # the other component's Greeting doesn't pick up that handler
+    assert proto_server.request('GET', '/other/Greeting/x')[0] == 404
+    # messages without a table only get a route from a custom handler
+    assert proto_server.request('GET', '/web/Plain')[0] == 404
+    assert proto_server.request('GET', '/web/Thing') == (200, b'{"data": []}')

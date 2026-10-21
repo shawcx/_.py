@@ -28,6 +28,20 @@ DATA = '''
     class item:
         label : str
         count : int
+
+    @_.data.no_table
+    class custom:
+        name : str
+
+    @_.data.handles(custom)
+    class custom_handler:
+        async def get(self, record_id=None):
+            self.write(f'hello {record_id}')
+
+    # no table and no custom handler, so nothing to serve
+    @_.data.no_table
+    class notable:
+        name : str
     '''
 
 
@@ -143,3 +157,13 @@ def test_bad_body(server, body):
 
 def test_delete_without_id(server):
     assert server.request('DELETE', '/data/person')[0] == 400
+
+
+def test_custom_handler_route(server):
+    # served at the record name rather than the handler class name
+    assert server.request('GET', '/data/custom/x') == (200, b'hello x')
+    assert server.request('GET', '/data/custom_handler/x')[0] == 404
+
+
+def test_no_table_without_handler_has_no_route(server):
+    assert server.request('GET', '/data/notable')[0] == 404

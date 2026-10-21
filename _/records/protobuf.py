@@ -128,7 +128,7 @@ class Protobuf(_.records.Record):
                 # ignore any module starting with _
                 if not member_name.startswith('_'):
                     # load submodules for nested protobufs
-                    self._container[member_name] = ProtobufContainer()
+                    self._container[member_name] = ProtobufContainer(self._container.handlers)
                     stash = (self._container,self._module_name)
                     self._container = self._container[member_name]
                     self.load_module(member)
@@ -156,7 +156,7 @@ class Protobuf(_.records.Record):
                 self._container[name] = record_type
 
                 if self.handlers and not options.Extensions[self._options.no_handler]:
-                    self._proto_handler(name, record_type, module.__name__)
+                    self._proto_handler(name, record_type, module.__name__, message.DESCRIPTOR.full_name)
 
     def _proto_table(self, name, message=None, descriptor=None, parent=None, parent_key=None, parent_col=None, ordered=False):
         child_tables = {}
@@ -293,16 +293,22 @@ class Protobuf(_.records.Record):
 
         return table_type
 
-    def _proto_handler(self, name, record_type, module_name):
+    def _proto_handler(self, name, record_type, module_name, full_name):
         ## check if a custom handler was defined
-        proto_handler = self._container.handlers.get(name)
+        proto_handler = self._container.handlers.get(full_name)
+        # the default handler needs a table
+        if not proto_handler and not hasattr(record_type, '__table__'):
+            return
+
+        handler_name = name
         if proto_handler:
-            name = proto_handler.__name__
+            handler_name = proto_handler.__name__
             module_name = proto_handler.__module__
         types = [proto_handler] if proto_handler else [_.records.HandlerInterface]
         types.append(tornado.web.RequestHandler)
 
-        record_handler = type(name, tuple(types), {
+        # served at the message name, whichever handler class is used
+        record_handler = type(handler_name, tuple(types), {
             '_component' : name,
             '_db'        : self.db,
             '_record'    : record_type,
@@ -441,12 +447,15 @@ def _scalar(field, value):
 
 
 class ProtobufContainer(_.Container):
-    handlers = {}
+    def __init__(self, handlers=None):
+        super().__init__()
+        # custom handlers by message full name, shared with subpackage containers
+        self.handlers = {} if handlers is None else handlers
 
     # decorator for adding custom handlers for message types
     def handles(self, _message):
         def wrap(_handler):
-            self.handlers[_message.DESCRIPTOR.name] = _handler
+            self.handlers[_message.DESCRIPTOR.full_name] = _handler
             return _handler
         return wrap
 

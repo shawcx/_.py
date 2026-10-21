@@ -129,6 +129,14 @@ class Application:
     def on_stop(self):
         pass
 
+    def _record_handler(self, component, cls):
+        '''records and caches register REST handlers here, only a WebApplication serves them'''
+        pass
+
+    def _login_handler(self, component, cls):
+        '''logins register their handlers here, only a WebApplication serves them'''
+        pass
+
     def __signalHandler(self, signum, frame):
         '''handle signals in a thread-safe way, frame is None unless on Windows'''
         signame = signal.Signals(signum).name

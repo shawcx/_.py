@@ -135,13 +135,16 @@ class Data(_.records.Record):
 
     def _data_handler(self, name, record_type):
         data_handler = self._container._handlers.get(name)
-        if data_handler:
-            name = data_handler.__name__
+        # the default handler needs a table
+        if not data_handler and not hasattr(record_type, '__table__'):
+            return
 
         types = [data_handler] if data_handler else [_.records.HandlerInterface]
         types.append(tornado.web.RequestHandler)
 
-        record_handler = type(name, tuple(types), {
+        # served at the record name, whichever handler class is used
+        handler_name = data_handler.__name__ if data_handler else name
+        record_handler = type(handler_name, tuple(types), {
             '_component' : name,
             '_db'        : self.db,
             '_record'    : record_type,

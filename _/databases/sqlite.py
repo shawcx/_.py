@@ -34,7 +34,7 @@ class UUID(sqlalchemy.types.TypeDecorator):
     impl = sqlalchemy.types.CHAR
 
     def load_dialect_impl(self, dialect):
-        return dialect.type_descriptor(CHAR(32))
+        return dialect.type_descriptor(sqlalchemy.types.CHAR(32))
 
     def process_bind_param(self, value, dialect):
         if value is None:
