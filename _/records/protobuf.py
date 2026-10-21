@@ -21,6 +21,7 @@ import sqlalchemy.ext.orderinglist
 import tornado.web
 import google.protobuf.descriptor
 import google.protobuf.message
+import google.protobuf.message_factory
 import google.protobuf.json_format
 
 import _
@@ -34,11 +35,23 @@ def _repeated(field):
         return field.label == field.LABEL_REPEATED
 
 
+def _attr(name):
+    'the record attribute for a field, Python keywords get a trailing underscore'
+    return f'{name}_' if keyword.iskeyword(name) else name
+
+
 def _check_names(descriptor):
-    # record fields are Python attributes so keywords can't be used
+    # a keyword field such as "from" becomes attribute "from_", which mustn't be taken
+    names = {field.name for field in descriptor.fields}
     for field in descriptor.fields:
-        if keyword.iskeyword(field.name):
-            raise _.error('Field "%s" in %s is a Python keyword', field.name, descriptor.full_name)
+        if keyword.iskeyword(field.name) and _attr(field.name) in names:
+            raise _.error('Field "%s" in %s clashes with the attribute for "%s"',
+                _attr(field.name), descriptor.full_name, field.name)
+
+
+def _renamed(descriptor):
+    'attribute to field name for fields whose attribute differs'
+    return {_attr(f.name):f.name for f in descriptor.fields if _attr(f.name) != f.name}
 
 
 # well-known types that get native columns and Python values
@@ -215,10 +228,11 @@ class Protobuf(_.records.Record):
                 else:
                     # declare the message fields so _as_dict has something to return
                     fields = message.DESCRIPTOR.fields
-                    members = {f.name:None for f in fields}
-                    members['__annotations__'] = {f.name:typing.Any for f in fields}
+                    members = {_attr(f.name):None for f in fields}
+                    members['__annotations__'] = {_attr(f.name):typing.Any for f in fields}
                     members['_ProtoInterface__pb'] = message
                     members['_proto_children'] = {}
+                    members['_proto_renamed'] = _renamed(message.DESCRIPTOR)
                     record_type = type(name, (ProtoInterface,), members)
                     record_type = dataclasses.dataclass(init=False, kw_only=True)(record_type)
 
@@ -237,11 +251,12 @@ class Protobuf(_.records.Record):
             '__module__'      : self._module_name,
             }
 
-        if message:
-            members['_ProtoInterface__pb'] = message
-
         if descriptor is None:
             descriptor = message.DESCRIPTOR
+        if message is None:
+            # child tables build their message class from the descriptor
+            message = google.protobuf.message_factory.GetMessageClass(descriptor)
+        members['_ProtoInterface__pb'] = message
         _check_names(descriptor)
 
         primary_key = None
@@ -250,6 +265,7 @@ class Protobuf(_.records.Record):
         for field in descriptor.fields:
             col_options = field.GetOptions()
             where = f'{descriptor.full_name}.{field.name}'
+            attr  = _attr(field.name)
 
             # the field stays in the message but isn't stored
             if col_options.Extensions[self._options.no_column]:
@@ -267,7 +283,8 @@ class Protobuf(_.records.Record):
             if is_primary_key:
                 if primary_key:
                     raise _.error('Only one primary key can be specified')
-                primary_key = field.name
+                primary_key = attr
+                primary_column = field.name
 
             # check if column should be unique
             unique = col_options.Extensions[self._options.uniq]
@@ -293,15 +310,15 @@ class Protobuf(_.records.Record):
                 ref_table_name = f'{name}_{field.name}'
                 ordering = {}
                 if _repeated(field):
-                    annotations[field.name] = sqlalchemy.orm.Mapped[list[ref_table_name]]
+                    annotations[attr] = sqlalchemy.orm.Mapped[list[ref_table_name]]
                     # keep repeated children in the order they were given
                     ordering = dict(
                         order_by         = f'{ref_table_name}._position',
                         collection_class = sqlalchemy.ext.orderinglist.ordering_list('_position'),
                         )
                 else:
-                    annotations[field.name] = sqlalchemy.orm.Mapped[typing.Optional[ref_table_name]]
-                members[field.name] = sqlalchemy.orm.relationship(
+                    annotations[attr] = sqlalchemy.orm.Mapped[typing.Optional[ref_table_name]]
+                members[attr] = sqlalchemy.orm.relationship(
                     back_populates=name,
                     lazy='joined',
                     cascade="all, delete-orphan",
@@ -326,10 +343,11 @@ class Protobuf(_.records.Record):
                         column_type = sqlalchemy.TEXT()
                     column_type = self.db.array(column_type)
 
-            annotations[field.name] = sqlalchemy.orm.Mapped[typing.Optional[typing.Any]]
-            members[field.name] = sqlalchemy.orm.mapped_column(
+            annotations[attr] = sqlalchemy.orm.Mapped[typing.Optional[typing.Any]]
+            members[attr] = sqlalchemy.orm.mapped_column(
                 column_type,
                 *foreign_key,
+                name=field.name,
                 primary_key=is_primary_key,
                 unique=unique,
                 init=False,
@@ -339,7 +357,7 @@ class Protobuf(_.records.Record):
         table_options = descriptor.GetOptions()
 
         if table_options.HasExtension(self._options.id):
-            primary_key = table_options.Extensions[self._options.id]
+            primary_key = primary_column = table_options.Extensions[self._options.id]
             members[primary_key] = sqlalchemy.orm.mapped_column(
                 sqlalchemy.INTEGER,
                 primary_key=True,
@@ -347,7 +365,7 @@ class Protobuf(_.records.Record):
                 init=False,
                 )
         elif primary_key is None:
-            primary_key = f'{name}_id'
+            primary_key = primary_column = f'{name}_id'
             members[primary_key] = sqlalchemy.orm.mapped_column(
                 sqlalchemy.INTEGER,
                 primary_key=True,
@@ -378,16 +396,18 @@ class Protobuf(_.records.Record):
         members['__primary_key__'] = primary_key
         members['_proto_children'] = {}
         members['_proto_required'] = tuple(required)
+        members['_proto_renamed']  = _renamed(descriptor)
 
         table_type = type(name, (ProtoInterface,self.db.Base,), members)
 
-        if message:
-            # refuse to store a record that its message can't represent
-            sqlalchemy.event.listen(table_type, 'before_insert', _validate)
-            sqlalchemy.event.listen(table_type, 'before_update', _validate)
+        # refuse to store a record that its message can't represent, child
+        # tables too as they can be updated without their parent
+        sqlalchemy.event.listen(table_type, 'before_insert', _validate)
+        sqlalchemy.event.listen(table_type, 'before_update', _validate)
 
         for child_table,field in child_tables.items():
-            child_type = self._proto_table(child_table, descriptor=field.message_type, parent=name, parent_key=primary_key, parent_col=field.name, ordered=_repeated(field))
+            # the foreign key names the parent's column, which differs from the attribute for keywords
+            child_type = self._proto_table(child_table, descriptor=field.message_type, parent=name, parent_key=primary_column, parent_col=_attr(field.name), ordered=_repeated(field))
             table_type._proto_children[field.name] = child_type
             setattr(table_type, f'_{field.name}', child_type)
 
@@ -449,13 +469,15 @@ class ProtoInterface(_.records.RecordsInterface):
     _proto_children = {}
     # fields marked (required) in the .proto
     _proto_required = ()
+    # attribute to field name where they differ, e.g. from_ for from
+    _proto_renamed = {}
 
     def _check_required(self):
         for name in self._proto_required:
-            if getattr(self, name, None) is None:
+            if getattr(self, _attr(name), None) is None:
                 raise _.error('%s.%s is required', type(self).__name__, name)
         for name in self._proto_children:
-            children = getattr(self, name, None) or []
+            children = getattr(self, _attr(name), None) or []
             for child in children if isinstance(children, list) else [children]:
                 child._check_required()
 
@@ -485,14 +507,14 @@ class ProtoInterface(_.records.RecordsInterface):
             elif field.has_presence and not pb.HasField(field.name):
                 # optional and oneof fields that were not set
                 value = None
-            setattr(self, field.name, value)
+            setattr(self, _attr(field.name), value)
         return self
 
     def _fill_pb(self, pb):
         'set the fields of a protobuf message from the record'
         json_form = {}
         for field in pb.DESCRIPTOR.fields:
-            value = getattr(self, field.name, None)
+            value = getattr(self, _attr(field.name), None)
             if value is None:
                 continue
             kind = _wkt(field)
@@ -514,6 +536,22 @@ class ProtoInterface(_.records.RecordsInterface):
         if json_form:
             google.protobuf.json_format.ParseDict(json_form, pb)
         return pb
+
+    def _as_dict(self):
+        # not dataclasses.asdict, which empties ordering_list collections when it
+        # rebuilds them, and with the .proto field names, e.g. from not from_
+        _dict = {}
+        for field in dataclasses.fields(self):
+            value = getattr(self, field.name)
+            if isinstance(value, ProtoInterface):
+                value = value._as_dict()
+            elif isinstance(value, list):
+                value = [v._as_dict() if isinstance(v, ProtoInterface) else v for v in value]
+            _dict[self._proto_renamed.get(field.name, field.name)] = value
+        if hasattr(self, '__primary_key__'):
+            key = self.__primary_key__
+            _dict[self._proto_renamed.get(key, key)] = getattr(self, key)
+        return _dict
 
     @classmethod
     def _parse(cls, parse, *args):

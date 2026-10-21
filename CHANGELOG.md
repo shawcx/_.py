@@ -27,6 +27,9 @@ Unreleased
   - `Struct`, `Value` and `ListValue` become JSON columns holding plain
     dicts, values and lists.
   - Repeated well-known types are stored as JSON in proto3 JSON form.
+- Protobuf fields named after Python keywords, such as `from` or `class`,
+  are supported: the record attribute is `from_`, while the column, the
+  message and the JSON output keep `from`.
 
 - Protobuf field options that were declared but ignored now work:
   - `(required)` makes the column NOT NULL and refuses to store a record
@@ -38,6 +41,11 @@ Unreleased
 
 ### Fixed
 
+- In 0.9.0 the JSON output of relational protobuf records (`_as_dict`,
+  `_as_json` and the REST handlers) left repeated child records out; the
+  data was stored and read correctly.
+- Relational child records are checked against their message when they're
+  saved on their own, not only through their parent.
 - dblogin pointed at an unknown database crashed with a `KeyError`
   traceback instead of naming the database.
 

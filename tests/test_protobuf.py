@@ -60,7 +60,7 @@ PROTO = '''
     message Order {
         option (id) = 'order_id';
         message Line {
-            string  sku  = 1;
+            string  sku  = 1 [(required) = true];
             int32   qty  = 2;
             Address origin = 3;
         }
@@ -86,6 +86,21 @@ PROTO = '''
         repeated google.protobuf.Timestamp times = 9;
         google.protobuf.Timestamp   unset = 10;
         google.protobuf.BytesValue  blob  = 11;
+    }
+
+    message Route {
+        message Hop {
+            string import = 1;
+        }
+        string       from  = 1 [(pkey) = true];
+        string       to    = 2;
+        string       class = 3 [(required) = true];
+        repeated Hop hops  = 4;
+    }
+
+    message Keywords {
+        option (no_table) = true;
+        string from = 1;
     }
 
     message Owner {
@@ -215,6 +230,26 @@ APP = '''
                 columns,tables = await conn.run_sync(event_columns)
             out['event_columns'] = dict(columns=columns, child_tables=sorted(t for t in tables if t.startswith('Event_')))
 
+            # fields named after Python keywords are attributes with a trailing underscore
+            ROUTE = {'from': 'a', 'to': 'b', 'class': 'x', 'hops': [{'import': 'i'}]}
+            await db.insert(pb.Route._from_dict(ROUTE))
+            route = await db.find_one(pb.Route, 'a')
+            route_dict = route._as_dict()
+            for hop in route_dict['hops']:
+                hop.pop('Route_hops_id', None)
+            def route_columns(conn):
+                return sorted(c['name'] for c in sqlalchemy.inspect(conn).get_columns('Route'))
+            async with db.engine.connect() as conn:
+                columns = await conn.run_sync(route_columns)
+            out['route'] = dict(
+                attrs   = [route.from_, route.class_],
+                dict    = route_dict,
+                pb      = as_json(route._as_pb()) == expected(pbt.Test_pb2.Route, ROUTE),
+                columns = columns,
+                no_table = [pb.Keywords._from_dict({'from': 'z'}).from_,
+                            json.loads(pb.Keywords._from_dict({'from': 'z'})._as_json())],
+                )
+
             # required, ref and no_column options
             await db.insert(pb.Owner._from_dict(dict(name='alice')))
             pet = dict(name='rex', owner='alice', age=3, home={'city': 'x'}, scratch='kept')
@@ -254,6 +289,16 @@ APP = '''
             await db.insert(pb.Order._from_dict(ORDER))
             order = (await db.find(pb.Order))[0]
             out['order'] = as_json(order._as_pb()) == expected(pbt.Test_pb2.Order, ORDER)
+            # changing only a child row is checked too
+            if _.config.getboolean('pb', 'relational'):
+                order.lines[0].sku = None
+                try:
+                    await db.upsert(order)
+                    out['child_check'] = 'stored'
+                except _.error as e:
+                    out['child_check'] = str(e)
+                order = (await db.find(pb.Order))[0]
+                out['child_kept'] = order.lines[0].sku
             await db.delete(pb.Order, order.order_id)
 
             if _.config.getboolean('pb', 'relational'):
@@ -385,6 +430,18 @@ def test_protobuf_records(run_proto_app, relational):
     assert columns['count'] == 'BIGINT'
     # no child tables, even in relational mode
     assert out['event_columns']['child_tables'] == []
+
+    route = out['route']
+    assert route['attrs'] == ['a', 'x']
+    # the dict, the message and the columns use the .proto names
+    assert route['dict'] == {'from': 'a', 'to': 'b', 'class': 'x', 'hops': [{'import': 'i'}]}
+    assert route['pb'] is True
+    assert route['columns'] == sorted(['from', 'to', 'class'] + ([] if relational else ['hops']))
+    assert route['no_table'] == ['z', {'from': 'z'}]
+
+    if relational:
+        assert out['child_check'] == 'Order_lines.sku is required'
+        assert out['child_kept'] == 's1'
 
     pet = out['pet']
     assert pet['ok'] == 'stored'
