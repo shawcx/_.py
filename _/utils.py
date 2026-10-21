@@ -78,8 +78,9 @@ class JSONEncoder(json.JSONEncoder):
             return base64.b64encode(obj).decode('ascii')
         if isinstance(obj, uuid.UUID):
             return str(obj)
-        if isinstance(obj, datetime.datetime):
-            return str(obj)
+        # ISO 8601, which covers datetime too as it's a date
+        if isinstance(obj, (datetime.date, datetime.time)):
+            return obj.isoformat()
         if isinstance(obj, datetime.timedelta):
             return obj.total_seconds()
         return json.JSONEncoder.default(self, obj)

@@ -12,6 +12,9 @@ Unreleased
   `"90.5s"`, bytes as base64. Unset optional and message fields are left
   out, and relational child records no longer include their internal ids.
   A generated primary key such as `order_id` is still included.
+- **JSON output of dates and times** is ISO 8601 for every record type, for
+  example `2024-05-01T12:00:00+00:00` rather than `2024-05-01 12:00:00+00:00`.
+  `date` and `time` values, which used to fail, are encoded too.
 - **Protobuf well-known types** get native columns, so existing tables
   differ and the startup check prints the SQL. In JSON mode a JSON
   `Timestamp` column becomes `TIMESTAMPTZ`, a type change you apply by
