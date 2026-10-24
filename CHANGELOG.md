@@ -4,6 +4,11 @@ Changelog
 Unreleased
 ----------
 
+### Added
+
+- `--version` prints the app's version, from a `version` attribute on the
+  app class, then underscorepy's.
+
 ### Changed
 
 - `make deb` builds a Debian package with debhelper and pybuild from
@@ -12,6 +17,8 @@ Unreleased
 
 ### Fixed
 
+- `--version` started the app instead of printing the version. It now
+  answers before reading the INI files or loading any component.
 - Record POSTs that hit a unique constraint, and PUTs that fail, returned
   500 instead of 409 and 400 on Tornado older than 6.5.
 

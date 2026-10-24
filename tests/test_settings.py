@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 APP = '''
     import json
     import _
@@ -38,3 +40,37 @@ def test_missing_ini_warns(run_app):
     result = run_app({'app.py' : APP.replace("dict(_.config['app'])", '{}')})
     assert config_of(result) == {}
     assert 'Unable to read config file' in result.stderr
+
+
+VERSION_APP = '''
+    import _
+
+    class App(_.WebApplication):
+        version = '1.2.0'
+
+        def initialize(self):
+            print('started')
+            self.stop()
+
+    App.main()
+    '''
+
+
+@pytest.mark.parametrize('flag', ['--version', '-V'])
+def test_version(run_app, flag):
+    import _.version
+    # an unloadable component shows nothing is loaded or started
+    result = run_app({
+        'app.py'  : VERSION_APP,
+        'app.ini' : '[databases]\nstore = +missing.module\n',
+        }, flag)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ['app 1.2.0', f'underscorepy {_.version.__version__}']
+    assert result.stderr == ''
+
+
+def test_version_without_app_version(run_app):
+    import _.version
+    result = run_app({'app.py' : VERSION_APP.replace("version = '1.2.0'", 'pass')}, '--version')
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [f'underscorepy {_.version.__version__}']

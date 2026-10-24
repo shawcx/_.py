@@ -30,7 +30,7 @@ Tests: set up with `uv venv && uv pip install -e '.[test,protobuf,postgres]'`, t
 1. `_.name` defaults to the lowercased app class name; `_.paths` roots at the app module's directory joined with `ns`.
 2. INI files are merged in order: `<name>.ini`, `<name>.ini.local` (beside the app), `/etc/<ns>/<name>.ini`, `~/.<name>.ini`, then `--ini/-I`.
 3. Components load in a fixed order: `databases`, `records`, `caches`, `logins`, `supports`. Records depend on databases; the sessions cache and dblogin reference database instances by name.
-4. Args are parsed twice: once for `--ini`/`--debug`, then fully after components have added their own flags.
+4. Args are parsed twice: once for `--ini`/`--debug`, then fully after components have added their own flags. `--version` is answered in the first pass, before any INI or component loads: it prints the app class's `version` attribute, if set, and underscorepy's version, then stops.
 5. Each database then runs `create_tables()`, after every component has defined its models and before the `args()` hooks (dblogin's `--add-user` needs its table).
    - An empty database is created with `create_all`.
    - Otherwise alembic autogenerate compares the models with the database, looking only at tables the models define. Any difference stops startup.

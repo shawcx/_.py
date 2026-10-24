@@ -17,6 +17,9 @@ import _
 
 
 class Application:
+    # printed by --version when set
+    version = None
+
     @classmethod
     def main(cls, ns=None):
         _.application = self = cls()

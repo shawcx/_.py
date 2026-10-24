@@ -96,6 +96,14 @@ async def load(**kwds):
         force   = True
         )
 
+    # answer --version before the ini files and components, which may connect to servers
+    if '--version' in remainder or '-V' in remainder:
+        if _.application.version:
+            print(_.name, _.application.version)
+        print('underscorepy', _.version.__version__)
+        _.application.stop()
+        return
+
     # load the ini files, at least one file must exist
     try:
         if _.args.debug:
@@ -125,6 +133,7 @@ async def load(**kwds):
         action='store_true',
         help='Log verbose debugging information')
 
+    # answered in the first pass, listed here for --help
     _.argparser.add_argument('--version', '-V',
         action='store_true',
         help='Show version and exit'
