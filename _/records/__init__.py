@@ -170,7 +170,7 @@ class HandlerInterface(_.handlers.Protected):
         try:
             await self._db.insert(record)
         except _.error as e:
-            raise _.HTTPError(409, e) from None
+            raise _.HTTPError(409, '%s', e) from None
         self.set_status(204)
         #self.write(record._as_dict())
 
@@ -181,7 +181,7 @@ class HandlerInterface(_.handlers.Protected):
         try:
             await self._db.upsert(record)
         except _.error as e:
-            raise _.HTTPError(400, e) from None
+            raise _.HTTPError(400, '%s', e) from None
         self.set_status(204)
 
     @_.auth.records

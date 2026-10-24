@@ -1,6 +1,14 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+### Fixed
+
+- Record POSTs that hit a unique constraint, and PUTs that fail, returned
+  500 instead of 409 and 400 on Tornado older than 6.5.
+
 0.10.0
 ------
 
