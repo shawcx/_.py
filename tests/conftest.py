@@ -22,6 +22,9 @@ import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# the test servers are local, so ignore any http_proxy (pybuild sets one)
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 
 def backends():
     yield 'sqlite'
@@ -120,7 +123,7 @@ class Server:
         url = f'http://127.0.0.1:{self.port}{path}'
         req = urllib.request.Request(url, data=body, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=10) as r:
+            with opener.open(req, timeout=10) as r:
                 return r.status, r.read()
         except urllib.error.HTTPError as e:
             return e.code, e.read()

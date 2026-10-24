@@ -1,3 +1,6 @@
+import pytest
+
+
 APP = '''
     import os
     import signal
@@ -81,6 +84,7 @@ def test_missing_template_is_not_found(tmp_path):
 
 
 def test_json_module_is_not_patched(run_app):
+    pytest.importorskip('google.protobuf')
     result = run_app({'app.py' : '''
         import json
         import _

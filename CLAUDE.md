@@ -9,8 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - `make install`: `pip3 install --upgrade .`. `make develop` does an editable install with every extra.
-- `make dist`: sdist and wheel via `python -m build`. `make deb`: Debian package (needs `stdeb`).
-- Packaging metadata is in `pyproject.toml`. The version comes from `_/version.py`, and `setup.py` is only a shim for stdeb.
+- `make dist`: sdist and wheel via `python -m build`.
+- `make deb`: builds `deb_dist/python3-underscorepy_<version>_all.deb` from `debian/` (dh + pybuild) in a `debian:trixie` Docker container, running the tests and lintian. Set `DEB_IMAGE=` for another release.
+  - It needs setuptools 77 or later and SQLAlchemy 2 from the distro, so Debian 13 or Ubuntu 25.10 and later. Ubuntu 24.04 and Mint 22 have neither.
+  - On a suitable host, `dpkg-buildpackage -b -us -uc` builds it without Docker.
+  - Releases add a `debian/changelog` entry matching `_/version.py`; `make deb` refuses to build without one.
+  - `debian/control` lists the runtime Depends by hand, because dh_python3 drops them. Keep them in step with `pyproject.toml`, and the extras in Suggests.
+- Packaging metadata is in `pyproject.toml`. The version comes from `_/version.py`.
 - `make clean` / `make distclean`
 - Run the example app: `make -C skeleton run` (compiles protobufs with `protoc`, builds JS/CSS via npm/browserify/sass, then runs `PYTHONPATH=.. python3 -m skeleton --debug`). Needs the databases it names in `skeleton.ini` (Postgres, and Redis for the redis cache) unless you trim the INI.
 - Print the Protobuf options template: `python3 -m _.records.protobuf`

@@ -4,6 +4,12 @@ Changelog
 Unreleased
 ----------
 
+### Changed
+
+- `make deb` builds a Debian package with debhelper and pybuild from
+  `debian/`, in a `debian:trixie` Docker container, instead of with stdeb.
+  `setup.py` is gone.
+
 ### Fixed
 
 - Record POSTs that hit a unique constraint, and PUTs that fail, returned

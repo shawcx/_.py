@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from conftest import Server
+from conftest import Server, opener
 
 CHECK = '''
     import json
@@ -103,7 +103,7 @@ def basic_request(server, header=None):
     if header:
         req.add_header('Authorization', header)
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with opener.open(req, timeout=10) as r:
             return r.status, r.read(), r.headers
     except urllib.error.HTTPError as e:
         return e.code, e.read(), e.headers

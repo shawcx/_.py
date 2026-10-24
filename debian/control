@@ -1,0 +1,44 @@
+Source: underscorepy
+Section: python
+Priority: optional
+Maintainer: Matthew Shaw <mshaw.cx@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-python3,
+ pybuild-plugin-pyproject,
+ python3-all,
+ python3-setuptools (>= 77),
+ python3-aiosqlite <!nocheck>,
+ python3-alembic <!nocheck>,
+ python3-greenlet <!nocheck>,
+ python3-pytest <!nocheck>,
+ python3-sqlalchemy (>= 2) <!nocheck>,
+ python3-tornado (>= 6.3) <!nocheck>,
+Standards-Version: 4.7.2
+Homepage: https://shaw.cx/_.py
+Rules-Requires-Root: no
+
+Package: python3-underscorepy
+Architecture: all
+Depends:
+ python3-greenlet,
+ python3-sqlalchemy (>= 2),
+ python3-tornado (>= 6.3),
+ ${misc:Depends},
+ ${python3:Depends},
+Suggests:
+ python3-aiosqlite,
+ python3-alembic,
+ python3-asyncpg,
+ python3-ldap,
+ python3-protobuf,
+ python3-redis,
+Description: async application framework on Tornado and SQLAlchemy
+ underscorepy, imported as _, builds asyncio and Tornado web applications
+ that are configured from INI files. It provides databases, records with
+ REST handlers, caches, logins and sessions, and can generate systemd and
+ nginx configuration for an app.
+ .
+ Install the suggested packages for the components an app uses: asyncpg
+ for Postgres, aiosqlite for SQLite, redis, protobuf records, LDAP logins
+ and alembic schema migrations.

@@ -7,6 +7,12 @@ __pycache__
 /build
 /dist
 /deb_dist
+/.pybuild
+/debian/.debhelper
+/debian/python3-underscorepy
+/debian/debhelper-build-stamp
+/debian/files
+/debian/*.substvars
 /*.egg-info
 /*.tar.gz
 .venv
